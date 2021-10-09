@@ -6,13 +6,13 @@ from ctypes import memset
 from sys import getsizeof
 
 def kind(string):
-     kind = 1
-     for x in string:
-         if (o := ord(x)) > 0xffff:
-             return 4
-         elif o > 0xff:
-             kind = 2
-     return kind
+    kind = 1
+    for x in string:
+        if (o := ord(x)) > 0xffff:
+            return 4
+        elif o > 0xff:
+            kind = 2
+    return kind
 
 def s_assign_1byte(string, otherstring):
     assert len(string) == len(otherstring), "argument 1 must have the same length as argument 2"
