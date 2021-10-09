@@ -1,6 +1,6 @@
 # assign to a string using `memset` and `getsizeof`. Root of code from a `id(a)+getsizeof(a)-len(a)-1` snippet and made because of
-<@!745530441838231662> 's demand for a way to change a string (didn't notice changing the actual strings are needed). Made out of
-inspiration and curiosity.
+# <@!745530441838231662> 's demand for a way to change a string (didn't notice changing the actual strings are needed). Made out of
+# inspiration and curiosity.
 
 from ctypes import memset
 from sys import getsizeof
