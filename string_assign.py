@@ -6,18 +6,18 @@ from ctypes import memset
 from sys import getsizeof
 
 def kind(string):
-    kind = 1
-    for x in string:
-        if (o := ord(x)) > 0xffff:
-            return 4
-        elif o > 0xff:
-            kind = 2
-    return kind
+     kind = 1
+     for x in string:
+         if (o := ord(x)) > 0xffff:
+             return 4
+         elif o > 0xff:
+             kind = 2
+     return kind
 
 def s_assign_1byte(string, otherstring):
     assert len(string) == len(otherstring), "argument 1 must have the same length as argument 2"
     assert kind(string) == 1 and kind(otherstring) <= 1, "argument 1 must have the same kind as argument 2"
-    ref = id(a)+getsizeof(a)-len(a)-1
+    ref = id(string)+getsizeof(string)-len(string)-1
     for i, x in enumerate(otherstring):
         memset(ref+i, ord(x), 1)
     return ref
@@ -25,7 +25,7 @@ def s_assign_1byte(string, otherstring):
 def s_assign_2byte(string, otherstring):
     assert len(string) == len(otherstring), "argument 1 must have the same length as argument 2"
     assert kind(string) == 2 and kind(otherstring) <= 2, "argument 1 must have the same/greater kind as argument 2"
-    ref = id(a)+getsizeof(a)-(len(a)*2)-2
+    ref = id(string)+getsizeof(string)-(len(string)*2)-2
     for i, x in enumerate(otherstring):
         setat = ref+2*i
         ord_x = ord(x)
@@ -36,7 +36,7 @@ def s_assign_2byte(string, otherstring):
 def s_assign_4byte(string, otherstring):
     assert len(string) == len(otherstring), "argument 1 must have the same length as argument 2"
     assert kind(string) == 4 and kind(otherstring) <= 4, "argument 1 must have the same/greater kind as argument 2"
-    ref = id(a)+getsizeof(a)-(len(a)*4)-4
+    ref = id(string)+getsizeof(string)-(len(string)*4)-4
     for i, x in enumerate(otherstring):
         setat = ref+4*i
         ord_x = ord(x)
