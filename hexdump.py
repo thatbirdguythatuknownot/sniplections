@@ -51,12 +51,12 @@ has_help = 0
 if '-h' in options_set:
     options.remove('-h')
     has_help = 1
-    print("""
-HEXDUMP PROGRAM
+    print_noline("""HEXDUMP PROGRAM
 Usage:
 hexdump [options] file[.extension]/.extension
 python hexdump [options] file[.extension]/.extension
 
+Options:
 -h, -? = Print this help message
 -f = Choose format:
     o = octal format for numbers (left-aligned for offsets)
@@ -64,17 +64,18 @@ python hexdump [options] file[.extension]/.extension
     X = uppercase hex format for numbers (right-aligned, zero-filled for offsets)
     x = lowercase hex format for numbers (right-aligned, zero-filled for offsets) [DEFAULT]
 -o = how many characters in a dump line/offset number [DEFAULT 16]
+
 """)
 
 if (not has_help) and '-?' in options_set:
     options.remove('-?')
     has_help = 1
-    print("""
-HEXDUMP PROGRAM
+    print_noline("""HEXDUMP PROGRAM
 Usage:
 hexdump [options] file[.extension]/.extension
 python hexdump [options] file[.extension]/.extension
 
+Options:
 -h, -? = Print this help message
 -f = Choose format:
     o = octal format for numbers (left-aligned for offsets)
@@ -82,6 +83,7 @@ python hexdump [options] file[.extension]/.extension
     X = uppercase hex format for numbers (right-aligned, zero-filled for offsets)
     x = lowercase hex format for numbers (right-aligned, zero-filled for offsets) [DEFAULT]
 -o = how many characters in a dump line/offset number [DEFAULT 16]
+
 """)
 
 need_input.sort(key=lambda x: x[0])
