@@ -16,4 +16,4 @@ Hexdump program. Modifyable specifications. Supposed to be run as a command or r
 ```powershell
 python hexdump.py [options] file.extension
 ```
-If file has no extension, it can be simply run as `file`.
+If file has no extension, it can be simply run as `file`. Full help message shown when run as `python hexdump.py -h`.
