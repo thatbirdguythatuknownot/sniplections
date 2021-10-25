@@ -47,10 +47,33 @@ if '-o' in options_set:
     else:
         need_input.append((i, 'offset'))
 
+has_help = 0
 if '-h' in options_set:
     options.remove('-h')
+    has_help = 1
     print("""
 HEXDUMP PROGRAM
+Usage:
+hexdump [options] file[.extension]/.extension
+python hexdump [options] file[.extension]/.extension
+
+-h, -? = Print this help message
+-f = Choose format:
+    o = octal format for numbers (left-aligned for offsets)
+    d = decimal format for numbers (right-aligned for offsets)
+    X = uppercase hex format for numbers (right-aligned, zero-filled for offsets)
+    x = lowercase hex format for numbers (right-aligned, zero-filled for offsets) [DEFAULT]
+-o = how many characters in a dump line/offset number [DEFAULT 16]
+""")
+
+if (not has_help) and '-?' in options_set:
+    options.remove('-?')
+    print("""
+HEXDUMP PROGRAM
+Usage:
+hexdump [options] file[.extension]/.extension
+python hexdump [options] file[.extension]/.extension
+
 -h, -? = Print this help message
 -f = Choose format:
     o = octal format for numbers (left-aligned for offsets)
