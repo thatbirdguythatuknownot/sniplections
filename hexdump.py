@@ -47,6 +47,19 @@ if '-o' in options_set:
     else:
         need_input.append((i, 'offset'))
 
+if '-h' in options_set:
+    options.remove('-h')
+    print("""
+HEXDUMP PROGRAM
+-h, -? = Print this help message
+-f = Choose format:
+    o = octal format for numbers (left-aligned for offsets)
+    d = decimal format for numbers (right-aligned for offsets)
+    X = uppercase hex format for numbers (right-aligned, zero-filled for offsets)
+    x = lowercase hex format for numbers (right-aligned, zero-filled for offsets) [DEFAULT]
+-o = how many characters in a dump line/offset number [DEFAULT 16]
+""")
+
 need_input.sort(key=lambda x: x[0])
 for _, x in need_input:
     inp = input(f"Enter input for option {option_name_to_option[x]!r}: ")
