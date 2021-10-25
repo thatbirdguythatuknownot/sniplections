@@ -10,3 +10,6 @@ Assign to variable with a string using its `id`.
 
 **episode_list_script.py**<br/>
 Used to list PAW Patrol episodes (with a twist). `a`, `b`, and `c` can be replaced with a `requests.get` from the relationship fandom.
+
+**hexdump.py**<br/>
+Hexdump program. Modifyable specifications.
