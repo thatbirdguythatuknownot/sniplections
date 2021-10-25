@@ -68,6 +68,7 @@ python hexdump [options] file[.extension]/.extension
 
 if (not has_help) and '-?' in options_set:
     options.remove('-?')
+    has_help = 1
     print("""
 HEXDUMP PROGRAM
 Usage:
@@ -110,13 +111,15 @@ for _, x in need_input:
     else:
         sys.exit(-1073741819)
 
-path = f"{os.getcwd()}\\{options[0]}"
 try:
+    path = f"{os.getcwd()}\\{options[0]}"
     open(path)
 except FileNotFoundError:
     path = options[0]
 except OSError:
     path = options[0]
+except IndexError:
+    sys.exit(has_help)
 
 with open(path, "r") as file:
     text = file.read()
