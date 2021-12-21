@@ -19,7 +19,8 @@ python hexdump.py [options] file.extension
 If file has no extension, it can be simply run as `file`. Full help message shown when run as `python hexdump.py -h`.
 
 **throwaway.py**<br/>
-Decorator to "throw away" extra unpacking values. Works like such: ```py
+Decorator to "throw away" extra unpacking values. Works like such:
+```py
 @throwaway_extra_unpack
 def a(x):
     b, c, d = x
