@@ -28,3 +28,16 @@ def a(x):
 
 print(a([1,2,3,4])) # (1, 2, 3)
 ```
+
+**pypreprocessor.py**<br/>
+Python preprocessor. To be used like this:
+```py
+$def macro_name everything else in this line is part of the macro
+$def macro_func_name1() macro function
+$def macro_func_name2(param_list,) doesn't need a trailing comma
+$del macro_name
+# everything after $del must only be the macro name
+# to be used in code like:
+print($macro_func_name1()$)
+print($macro_func_name2(a, b, c)$)
+```
