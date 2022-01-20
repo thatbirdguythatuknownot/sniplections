@@ -1,7 +1,7 @@
 import string
 from regex import compile as pcompile, sub
 letters = {*string.ascii_letters}
-match_macro = pcompile(r'\$(\w+)(\((?:[^()]++|(?0))++\))?\$').finditer
+match_macro = pcompile(r'\$(\w+)(\((?:[^()]++|(?0))++\)|\(\))?\$').finditer
 
 DEFAULT_DEFINE = {'_LINE': None, '_FILE': False}
 new_defines = DEFAULT_DEFINE.copy
@@ -51,7 +51,7 @@ def py_preprocessor(s, filename='<string>'):
                                 break
                         funcdefines[name] = (list_of_params, x)
             else:
-                defines[name] = x[y + 1:]
+                defines[x[:y]] = x[y + 1:]
         elif x.startswith('$del '):
             origline = x
             x = x[5:].strip()
@@ -72,6 +72,8 @@ def py_preprocessor(s, filename='<string>'):
                 if args:
                     assert name in funcdefines, f"macro name '{name}' is not a macro function name in line {i+1}"
                     args = list(map(str.strip, args[1:-1].split(',')))
+                    if args and args[-1] == '':
+                        args = args[:-1]
                     assert all(args), f"cannot have empty argument in macro function call to {name} in line {i+1}"
                     param_list, replacement = funcdefines[name]
                     assert len(param_list) == len(args), f"length of arguments in macro function call to {name} does not match parameters length in line {i+1}"
@@ -93,5 +95,5 @@ def py_preprocessor(s, filename='<string>'):
 
 nopreprocessor_compile = __builtins__.compile
 
-def preprocessor_compile(s, filename='<string>', *a, **k):
+def compile(s, filename='<string>', *a, **k):
     return nopreprocessor_compile(py_preprocessor(s, filename), filename, *a, **k)
