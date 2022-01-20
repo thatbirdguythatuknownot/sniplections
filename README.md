@@ -41,4 +41,4 @@ $del macro_name
 print($macro_func_name1()$)
 print($macro_func_name2(a, b, c)$)
 ```
-To compile, use `preprocessor_compile`.
+To compile with preprocessing, use `preprocessor_compile(s)` or `compile(py_preprocessor(s))`.
