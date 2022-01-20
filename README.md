@@ -41,3 +41,4 @@ $del macro_name
 print($macro_func_name1()$)
 print($macro_func_name2(a, b, c)$)
 ```
+To compile, use `preprocessor_compile`.
