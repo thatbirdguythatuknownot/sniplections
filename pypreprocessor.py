@@ -1,7 +1,7 @@
 import string
 from regex import compile as pcompile, sub
 letters = {*string.ascii_letters}
-match_macro = pcompile(r'\$(\w+)(\((?:[^()]++|(?0))++\)|\(\))?\$').finditer
+match_macro = pcompile(r'\$(\w+)(\((?:[^()]++|(?0))*+\))?\$').finditer
 
 DEFAULT_DEFINE = {'_LINE': None, '_FILE': False}
 new_defines = DEFAULT_DEFINE.copy
@@ -95,5 +95,5 @@ def py_preprocessor(s, filename='<string>'):
 
 nopreprocessor_compile = __builtins__.compile
 
-def compile(s, filename='<string>', *a, **k):
+def preprocessor_compile(s, filename='<string>', *a, **k):
     return nopreprocessor_compile(py_preprocessor(s, filename), filename, *a, **k)
