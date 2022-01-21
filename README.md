@@ -37,7 +37,8 @@ $def macro_func_name1() macro function
 $def macro_func_name2(param_list,) doesn't need a trailing comma
 $del macro_name
 # everything after $del must only be the macro name
-# to be used in code like:
+# to be used in code like this (macro_name must be defined using `$def`):
+print($macro_name$)
 print($macro_func_name1()$)
 print($macro_func_name2(a, b, c)$)
 ```
