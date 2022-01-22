@@ -100,5 +100,5 @@ def py_preprocessor(s, filename='<string>'):
 
 nopreprocessor_compile = __builtins__.compile
 
-def preprocessor_compile(s, filename='<string>', mode='exec' *a, **k):
+def preprocessor_compile(s, filename='<string>', mode='exec', *a, **k):
     return nopreprocessor_compile(py_preprocessor(s, filename), filename, mode, *a, **k)
