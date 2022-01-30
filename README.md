@@ -28,6 +28,7 @@ def a(x):
 
 print(a([1,2,3,4])) # (1, 2, 3)
 ```
+Can also be used with variables in `for` loops.
 
 **pypreprocessor.py**<br/>
 Python preprocessor. To be used like this:
