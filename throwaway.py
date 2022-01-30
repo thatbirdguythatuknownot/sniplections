@@ -8,7 +8,6 @@ class CodeWrap:
 
 def throwaway_extra_unpack(a, modify_inplace=False):
     co_code = bytearray(a.__code__.co_code)
-    CO_CODE_REPLACE = co_code.replace
     unpacknums = set()
     UNPACKNUMS_ADD = unpacknums.add
     for_iter_arg_index = [(0,0)]
@@ -32,7 +31,7 @@ def throwaway_extra_unpack(a, modify_inplace=False):
             UNPACKNUMS_ADD((y, bytes(co_code[h_orig:h])))
         if for_iter_not_done: for_iter_not_done -= 1
     for x,y in unpacknums:
-        co_code = CO_CODE_REPLACE(bytes((0x5c, x))+y, bytes((0x5e, x))+y+b'\1\0')
+        co_code = co_code.replace(bytes((0x5c, x))+y, bytes((0x5e, x))+y+b'\1\0')
     if modify_inplace:
         co_consts_list = list(a.__code__.co_consts)
         for i, x in enumerate(co_consts_list):
