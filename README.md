@@ -44,3 +44,6 @@ print($macro_func_name1()$)
 print($macro_func_name2(a, b, c)$)
 ```
 To compile with preprocessing, use `preprocessor_compile(s)` or `compile(py_preprocessor(s))`.
+
+**decompiler.py**<br/>
+Python decompiler. To be given a compiled code argument and it will return a string that should, when executed, do the exact same thing as the compiled code argument.
