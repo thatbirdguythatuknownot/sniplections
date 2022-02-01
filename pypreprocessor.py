@@ -8,13 +8,47 @@ has_macro = macropattern.search
 DEFAULT_DEFINE = {'_LINE': None, '_FILE': False}
 new_defines = DEFAULT_DEFINE.copy
 
+elif_directives = ['$elifdef ', '$eliffdef ', '$elif']
+elif_directives = ['$elifndef ', '$elifnfdef ', '$elif']
+
+class IterQueue:
+    def __init__(self, iterator):
+        self.iterator = iterator
+        self.queue = []
+    def __iter__(self):
+        return self
+    def __next__(self):
+        if self.queue:
+            return self.queue.pop()
+        return next(self.iterator)
+
 def py_preprocessor(s, filename='<string>'):
     assert type(filename) is str, "filename must be a string"
     defines = new_defines()
     funcdefines = {}
     lines = []
     apn_lines = lines.append
-    for i, x in enumerate(s.split('\n')):
+    has_ifdef = False
+    has_ifdef_func = False
+    has_if = False
+    skip_stack = []
+    NEW_SKIP = skip_stack.append
+    POP_SKIP = skip_stack.pop
+    ifmatch_stack = []
+    NEW_IF_DIRECTIVE = ifmatch_stack.append
+    POP_IF_DIRECTIVE = ifmatch_stack.pop
+    condition_stack = []
+    NEW_CONDITION = condition_stack.append
+    POP_CONDITION = condition_stack.pop
+    iterator = IterQueue(iter(s.split('\n')))
+    NEW_ITERQUEUE_ENTRY = iterator.queue.append
+    for i, x in enumerate(iterator):
+        if (skip_stack and skip_stack[-1]
+                and not (x.startswith(elif_directives[ifmatch_stack[-1]])
+                         or x.startswith(nelif_directives[ifmatch_stack[-1]])
+                         or x.startswith('$endif') and not x[6].isidentifier()
+                         or x.strip() == '$else')):
+            continue
         if x.startswith('$def '):
             x = x[5:].strip()
             assert x[0] in letters, f"not valid macro name in line {i+1}"
@@ -57,7 +91,6 @@ def py_preprocessor(s, filename='<string>'):
             else:
                 defines[x[:y]] = x[y + 1:]
         elif x.startswith('$del '):
-            origline = x
             x = x[5:].strip()
             assert x[0] in letters and (not x[1:] or x[1:].isalnum()), f"not valid macro name:{x}:in line {i+1}"
             if x in defines:
@@ -69,6 +102,104 @@ def py_preprocessor(s, filename='<string>'):
                 del funcdefines[x]
             else:
                 raise NameError(f"macro name '{x}' not defined")
+        elif x.startswith('$ifdef '):
+            x = x[7:].strip()
+            assert x[0] in letters and (not x[1:] or x[1:].isalnum()), f"not valid macro name:{x}:in line {i+1}"
+            NEW_IF_DIRECTIVE(0)
+            if x in defines:
+                NEW_CONDITION(1)
+                NEW_SKIP(0)
+            else:
+                NEW_CONDITION(0)
+                NEW_SKIP(1)
+        elif x.startswith('$ifndef '):
+            x = x[8:].strip()
+            assert x[0] in letters and (not x[1:] or x[1:].isalnum()), f"not valid macro name:{x}:in line {i+1}"
+            NEW_IF_DIRECTIVE(0)
+            if x in defines:
+                NEW_CONDITION(0)
+                NEW_SKIP(1)
+            else:
+                NEW_CONDITION(1)
+                NEW_SKIP(0)
+        elif x.startswith('$iffdef '):
+            x = x[8:].strip()
+            assert x[0] in letters and (not x[1:] or x[1:].isalnum()), f"not valid macro name:{x}:in line {i+1}"
+            NEW_IF_DIRECTIVE(1)
+            if x in funcdefines:
+                NEW_CONDITION(1)
+                NEW_SKIP(0)
+            else:
+                NEW_CONDITION(0)
+                NEW_SKIP(1)
+        elif x.startswith('$ifnfdef '):
+            x = x[9:].strip()
+            assert x[0] in letters and (not x[1:] or x[1:].isalnum()), f"not valid macro name:{x}:in line {i+1}"
+            NEW_IF_DIRECTIVE(1)
+            if x in funcdefines:
+                NEW_CONDITION(0)
+                NEW_SKIP(1)
+            else:
+                NEW_CONDITION(1)
+                NEW_SKIP(0)
+        elif x.startswith('$elifdef '):
+            x = x[9:].strip()
+            assert x[0] in letters and (not x[1:] or x[1:].isalnum()), f"not valid macro name:{x}:in line {i+1}"
+            assert not ifmatch_stack[-1], f"$elifdef doesn't match $ifdef in line {i+1}"
+            if condition_stack[-1]:
+                skip_stack[-1] = 1
+                continue
+            if x in defines:
+                condition_stack[-1] = 1
+                skip_stack[-1] = 0
+            else:
+                condition_stack[-1] = 0
+                skip_stack[-1] = 1
+        elif x.startswith('$elifndef '):
+            x = x[10:].strip()
+            assert x[0] in letters and (not x[1:] or x[1:].isalnum()), f"not valid macro name:{x}:in line {i+1}"
+            assert not ifmatch_stack[-1], f"$elifndef doesn't match $if(n)def in line {i+1}"
+            if condition_stack[-1]:
+                skip_stack[-1] = 1
+                continue
+            if x in defines:
+                condition_stack[-1] = 0
+                skip_stack[-1] = 1
+            else:
+                condition_stack[-1] = 1
+                skip_stack[-1] = 0
+        elif x.startswith('$eliffdef '):
+            x = x[10:].strip()
+            assert x[0] in letters and (not x[1:] or x[1:].isalnum()), f"not valid macro name:{x}:in line {i+1}"
+            assert ifmatch_stack[-1] == 1, f"$eliffdef doesn't match $iffdef in line {i+1}"
+            if condition_stack[-1]:
+                skip_stack[-1] = 1
+                continue
+            if x in funcdefines:
+                condition_stack[-1] = 1
+                skip_stack[-1] = 0
+            else:
+                condition_stack[-1] = 0
+                skip_stack[-1] = 1
+        elif x.startswith('$elifnfdef '):
+            x = x[11:].strip()
+            assert x[0] in letters and (not x[1:] or x[1:].isalnum()), f"not valid macro name:{x}:in line {i+1}"
+            assert ifmatch_stack[-1] == 1, f"$elifnfdef doesn't match $if(n)fdef in line {i+1}"
+            if condition_stack[-1]:
+                skip_stack[-1] = 1
+                continue
+            if x in funcdefines:
+                condition_stack[-1] = 0
+                skip_stack[-1] = 1
+            else:
+                condition_stack[-1] = 1
+                skip_stack[-1] = 0
+        elif x.startswith('$endif') and not x[6].isidentifier():
+            assert ifmatch_stack, f"$endif doesn't match any $if* directives in line {i+1}"
+            POP_CONDITION()
+            POP_SKIP()
+            POP_IF_DIRECTIVE()
+            NEW_ITERQUEUE_ENTRY(x[6:])
         else:
             while has_macro(x):
                 minus_pos = 0
