@@ -51,9 +51,9 @@ def mexpand(alphb, n, m=None):
             appn(''.join(t.replace("(", "").replace(")", "") if len(alphb[i]) == 1 else t for i, t in enumerate(st)))
     return ' + '.join(a)
 
-def mterm(m, n, n2):
+def mterm(l, n, n2, m=None):
     try:
-        return mexpand(m,n).split(" + ")[n2-1]
+        return mexpand(l,n,m).split(" + ")[n2-1]
     except:
         return ""
 
