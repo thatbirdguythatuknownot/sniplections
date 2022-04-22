@@ -1,12 +1,16 @@
 from struct import iter_unpack
 from types import FunctionType as function, CodeType as code
 from copy import copy
+from sys import hexversion
+
+is_311 = hexversion >= 0x030b0000
 
 class CodeWrap:
     def __init__(self, x):
         self.__code__ = x
 
 def throwaway_extra_unpack(a, modify_inplace=False):
+    def wrapper(
     co_code = bytearray(a.__code__.co_code)
     unpacknums = set()
     UNPACKNUMS_ADD = unpacknums.add
@@ -21,7 +25,7 @@ def throwaway_extra_unpack(a, modify_inplace=False):
             if for_iter_not_done:
                 co_code[for_iter_ind] += 1
             j = 0
-            h = i*2+2
+            h = i*2+2+2*is_311
             h_orig = h
             while j < y:
                 ch = co_code[h]
@@ -31,7 +35,7 @@ def throwaway_extra_unpack(a, modify_inplace=False):
             UNPACKNUMS_ADD((y, bytes(co_code[h_orig:h])))
         if for_iter_not_done: for_iter_not_done -= 1
     for x,y in unpacknums:
-        co_code = co_code.replace(bytes((0x5c, x))+y, bytes((0x5e, x))+y+b'\1\0')
+        co_code = co_code.replace(bytes((0x5c, x))+bytes((0, 0))*is_311+y, bytes((0x5e, x))+y+b'\1\0')
     if modify_inplace:
         co_consts_list = list(a.__code__.co_consts)
         for i, x in enumerate(co_consts_list):
