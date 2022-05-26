@@ -1,5 +1,5 @@
 # sniplections/c-extensions
-Collection of C extensions and possibly Cython scripts.
+Collection of C extensions and possibly Cython scripts. Probably all of the C extension functions are *really* unsafe.
 
 
 **algos_c.c**<br/>
