@@ -15,3 +15,10 @@ Collection of algorithms and Advent of Code (AoC) 2021 solutions, with format `[
 • Day 17 Part 1 & 2<br/>
 • Day 21 Part 1 & 2<br/>
 *some may not work*
+
+**a_c.c**<br/>
+Once used to compare raw C extension speed with Cython, now possibly even faster than Cython. Built with these commands:
+```bash
+gcc -fprofile-use -c -I"C:\Program Files\Python311\include" -O2 a_c.c
+gcc -fprofile-use -O2 -shared -o "C:\Program Files\Python311\Lib\a_c.pyd" a_c.o -lPython311 -L"C:\Program Files\Python311\libs"
+```
