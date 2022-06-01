@@ -48,5 +48,8 @@ To compile with preprocessing, use `preprocessor_compile(s)` or `compile(py_prep
 **decompiler.py**<br/>
 Python decompiler. To be given a compiled code argument and it will return a string that should, when executed, do the exact same thing as the compiled code argument. Is currently unfinished and only works for an early version of Python 3.11.0a2.
 
+**decompiler2.py**<br/>
+Same as **decompiler.py** but only works in Python 3.11.0a7.
+
 **mtheorem.py**<br/>
 Multinomial theorem expander.
