@@ -19,6 +19,9 @@ Collection of algorithms and Advent of Code (AoC) 2021 solutions, with format `[
 **a_c.c**<br/>
 Once used to compare raw C extension speed with Cython, now possibly even faster than Cython. Built with these commands:
 ```bash
-gcc -fprofile-use -c -I"C:\Program Files\Python311\include" -O2 a_c.c
-gcc -fprofile-use -O2 -shared -o "C:\Program Files\Python311\Lib\a_c.pyd" a_c.o -lPython311 -L"C:\Program Files\Python311\libs"
+clang -Ofast -march=native -c -I"C:\Program Files\Python311\include" a_c.c
+clang -Ofast -march=native -shared -o "C:\Program Files\Python311\Lib\a_c.pyd" a_c.o -lPython311 -L"C:\Program Files\Python311\libs"
 ```
+
+**fast_itertools.c**<br/>
+A faster version of [`more_itertools`](https://pypi.org/project/more-itertools/). Built using the same commands as `a_c.c` above.
