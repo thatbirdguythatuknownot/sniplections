@@ -1,5 +1,3 @@
-import gc
-
 from ast import *
 from ast import _SINGLE_QUOTES
 from contextlib import contextmanager
