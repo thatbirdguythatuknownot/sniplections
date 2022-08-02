@@ -621,30 +621,59 @@ class _LuaTranspiler(_Unparser):
     def visit_BinOp(self, node):
         operator_name = node.op.__class__.__name__
         if operator_name == "MatMul":
-            raise NotImplementedError("matrix multiplication is not supported")
-        if self.luau and operator_name in self.bitwise_replacements:
-            with self.delimit(f"{self.bitwise_replacements[operator_name]}(", ")"):
-                self.traverse(node.left)
-                self.write(", ")
-                self.traverse(node.right)
+            print("Lua transpiler warning: @ (left-associative matrix "
+                  "multiplication) is being used for .. (right-associative "
+                  "string concatenation)", flush=True)
+            operator = ".."
+            operator_precedence = _Precedence.CONCAT
         else:
-            operator = self.binop[operator_name]
-            operator_precedence = self.binop_precedence[operator]
-            with self.require_parens(operator_precedence, node):
-                if operator in self.binop_rassoc:
-                    left_precedence = operator_precedence.next()
-                    right_precedence = operator_precedence
-                else:
-                    left_precedence = operator_precedence
-                    right_precedence = operator_precedence.next()
-                self.set_precedence(left_precedence, node.left)
-                self.traverse(node.left)
-                self.write(f" {operator} ")
-                self.set_precedence(right_precedence, node.right)
-                self.traverse(node.right)
+            if self.luau and operator_name in self.bitwise_replacements:
+                with self.delimit(f"{self.bitwise_replacements[operator_name]}(", ")"):
+                    self.traverse(node.left)
+                    self.write(", ")
+                    self.traverse(node.right)
+                return
+            else:
+                operator = self.binop[operator_name]
+                operator_precedence = self.binop_precedence[operator]
+        with self.require_parens(operator_precedence, node):
+            if operator in self.binop_rassoc:
+                left_precedence = operator_precedence.next()
+                right_precedence = operator_precedence
+            else:
+                left_precedence = operator_precedence
+                right_precedence = operator_precedence.next()
+            self.set_precedence(left_precedence, node.left)
+            self.traverse(node.left)
+            self.write(f" {operator} ")
+            self.set_precedence(right_precedence, node.right)
+            self.traverse(node.right)
+    cmpops = {
+        "Eq": "==",
+        "NotEq": "~=",
+        "Lt": "<",
+        "LtE": "<=",
+        "Gt": ">",
+        "GtE": ">=",
+        "Is": "==",
+        "IsNot": "~=",
+    }
+    def visit_Compare(self, node):
+        with self.require_parens(_Precedence.CMP, node):
+            self.set_precedence(_Precedence.CMP.next(), node.left, *node.comparators)
+            self.traverse(node.left)
+            checked = {*()}
+            for o, e in zip(node.ops, node.comparators):
+                if (n := o.__class__.__name__) in {"In", "NotIn"}:
+                    raise NotImplementedError("membership operator not yet implemented")
+                cmpop = self.cmpops[o.__class__.__name__]
+                if n not in checked and n in {"Is", "IsNot"}:
+                    print(f"warning: using {cmpop} for {n} node")
+                    checked.add(n)
+                self.write(f" {cmpop} ")
+                self.traverse(e)
 
-if __name__ == "__main__":
-    c = parse("""
+c = parse("""
 from . import a
 from g import a, b, c
 from l import *
@@ -689,4 +718,4 @@ while True: pass
 {1: 3, 'b': 'ha', True: False}
 +((a >> b) % c)
 """)
-    print(_LuaTranspiler(luau=False).visit(c))
+print(_LuaTranspiler(luau=False).visit(c))
