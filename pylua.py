@@ -1,5 +1,5 @@
 from ast import *
-from ast import _SINGLE_QUOTES
+from ast import _SINGLE_QUOTES, _Unparser
 from contextlib import contextmanager
 from copy import deepcopy
 from enum import _simple_enum, IntEnum, auto
@@ -38,6 +38,7 @@ class _LuaTranspiler(_Unparser):
         self._indent = 0
         self._avoid_backslashes = _avoid_backslashes
         self._had_handler = False
+        self._is_call = False
         self.luau = luau
     def interleave_write(self, inter, f, seq):
         seq = iter(seq)
@@ -464,21 +465,6 @@ class _LuaTranspiler(_Unparser):
         raise NotImplementedError("f-strings are not yet supported")
     def visit_Name(self, node):
         self.write(node.id)
-        """
-        elif isinstance(node.ctx, Load):
-            if isinstance(node, Starred):
-                if isinstance(node.value, (List, Tuple, Set)):
-                    self.traverse(node.value.elts)
-                elif isinstance(node.value, Constant) and isinstance(node.value.value, str):
-                    self.interleave_write(lambda self.write(", "), ascii, node.value.value)
-                elif not isinstance(node.value, Call):
-                    with self.delimit("table.unpack(", ")"):
-                        self.traverse(node.value)
-                else:
-                    self.traverse(node.value)
-            else:
-                self.traverse(node.value)
-        """
     def _write_docstring(self, node):
         self.fill("--")
         self._write_str_avoiding_backslashes(node.value, quote_types=_ALL_QUOTES)
@@ -504,6 +490,8 @@ class _LuaTranspiler(_Unparser):
                 self.items_view(self._write_constant, value)
         elif value is ...:
             self._write_str_avoiding_backslashes("...")
+        elif value is None:
+            self.write("nil")
         else:
             self._write_constant(node.value)
     def visit_List(self, node):
@@ -661,19 +649,111 @@ class _LuaTranspiler(_Unparser):
     def visit_Compare(self, node):
         with self.require_parens(_Precedence.CMP, node):
             self.set_precedence(_Precedence.CMP.next(), node.left, *node.comparators)
-            self.traverse(node.left)
+            prev = node.left
             checked = {*()}
-            for o, e in zip(node.ops, node.comparators):
+            def do_compare(item):
+                nonlocal prev
+                o, e = item
                 if (n := o.__class__.__name__) in {"In", "NotIn"}:
                     raise NotImplementedError("membership operator not yet implemented")
                 cmpop = self.cmpops[o.__class__.__name__]
                 if n not in checked and n in {"Is", "IsNot"}:
                     print(f"warning: using {cmpop} for {n} node")
                     checked.add(n)
+                self.traverse(prev)
                 self.write(f" {cmpop} ")
                 self.traverse(e)
+                prev = e
+            self.interleave(lambda: self.write(" and "), do_compare, zip(node.ops, node.comparators))
+    boolops = {"And": "and", "Or": "or"}
+    boolop_precedence = {"and": _Precedence.AND, "or": _Precedence.OR}
+    def visit_BoolOp(self, node):
+        operator = self.boolops[node.op.__class__.__name__]
+        operator_precedence = self.boolop_precedence[operator]
+        with self.require_parens(operator_precedence, node):
+            s = f" {operator} "
+            self.interleave(lambda: self.write(s), self.traverse, node.values)
+    def visit_Attribute(self, node):
+        self.set_precedence(_Precedence.ATOM, node.value)
+        with self.delimit_if("(", ")", isinstance(node.value, (Constant, List, Tuple, Set, Dict))):
+            self.traverse(node.value)
+        if self._is_call:
+            self._is_call = False
+            self.write(":")
+        else:
+            self.write(".")
+        self.write(node.attr)
+    def visit_Call(self, node):
+        self.set_precedence(_Precedence.ATOM, node.func)
+        if isinstance(node.func, Attribute):
+            self._is_call = True
+        with self.delimit_if("(", ")", isinstance(node.func, (Constant, List, Tuple, Set, Dict))):
+            self.traverse(node.func)
+        with self.delimit("(", ")"):
+            comma = False
+            for e in node.args:
+                if comma:
+                    self.write(", ")
+                else:
+                    comma = True
+                self.traverse(e)
+            if node.keywords:
+                print("warning: converting keywords to normal arguments")
+            for e in node.keywords:
+                if comma:
+                    self.write(", ")
+                else:
+                    comma = True
+                self.traverse(e)
+    def visit_Subscript(self, node):
+        self.set_precedence(_Precedence.ATOM, node.value)
+        start = len(self._source)
+        with self.delimit_if("(", ")", isinstance(node.value, (Constant, List, Tuple, Set, Dict))):
+            self.traverse(node.value)
+        if isinstance(node.slice, Tuple):
+            raise NotImplementedError("tuple slices are not supported")
+        elif not isinstance(node.slice, Slice):
+            end = len(self._source)
+            with self.delimit("[", "]"):
+                self.traverse(node.slice)
+            self.write(" or ")
+            self._source += self._source[start:end]
+        with self.delimit(":sub(", ")"):
+            self.traverse(node.slice)
+            if not isinstance(node.slice, Slice):
+                self.write(", ")
+                self.traverse(node.slice)
+    def visit_Starred(self, node):
+        if isinstance(node.value, (List, Tuple, Set)):
+            self.traverse(node.value.elts)
+        elif isinstance(node.value, Constant) and isinstance(node.value.value, str):
+            self.interleave_write(lambda: self.write(", "), ascii, node.value.value)
+        elif not isinstance(node.value, Call):
+            with self.delimit("table.unpack(", ")"):
+                self.traverse(node.value)
+        else:
+            print("warning: starred expression is ignored")
+            self.traverse(node.value)
+    def visit_Ellipsis(self, node):
+        self._write_str_avoiding_backslashes("...")
+    def visit_Slice(self, node):
+        if node.lower:
+            self.traverse(node.lower)
+        else:
+            self.write("1")
+        if node.upper:
+            self.write(", ")
+            self.traverse(node.upper)
+        elif node.step:
+            self.write(", -1")
+        if node.step:
+            self.write(", ")
+            self.traverse(node.step)
+    def visit_Match(self, node):
+        raise NotImplementedError("match cases are not supported")
 
-c = parse("""
+if __name__ == "__main__":
+    c = parse("""
 from . import a
 from g import a, b, c
 from l import *
@@ -717,5 +797,15 @@ while True: pass
 5 if 10 else 7 if 3 else 2
 {1: 3, 'b': 'ha', True: False}
 +((a >> b) % c)
+a is b is c == d != e < f > g >= h <= i
+a + b and a + b and a + b and a + b and a + b and a + b and a + b and a + b and a + b and a + b and a + b and a + b and a + b and a + b and a + b and a + b
+a + b or a + b or a + b or a + b or a + b or a + b or a + b or a + b or a + b or a + b or a + b or a + b or a + b or a + b or a + b or a + b
+a.b
+a.b(*a, *b, *[c, d], *'efg')
+a[b]
+a[b:c:d]
+a[b::d]
+a[:c:d]
+a[b:c]
 """)
-print(_LuaTranspiler(luau=False).visit(c))
+    print(_LuaTranspiler(luau=False).visit(c))
