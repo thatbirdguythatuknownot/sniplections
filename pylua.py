@@ -875,9 +875,19 @@ class _LuaTranspiler(_Unparser):
         self.write(")")
     def visit_alias(self, node):
         raise NotImplementedError("alias should not be handled outside of Import/ImportFrom")
+    def visit_withitem(self, node):
+        raise NotImplementedError("with/async with is not supported")
+    def visit_match_case(self, node):
+        raise NotImplementedError("match cases are not supported")
+    def visit_MatchSequence(self, node):
+        raise NotImplementedError("match-case patterns are not supported")
+    visit_MatchOr = visit_MatchAs = visit_MatchClass = visit_MatchMapping = visit_MatchStar = visit_MatchSequence
+
+def lua_transpiler(str_code, luau=False):
+    return _LuaTranspiler(luau=luau).visit(parse(str_code))
 
 if __name__ == "__main__":
-    c = parse("""
+    c = """
 from . import a as d
 from g import a as b, b as c, c as d
 from l import *
@@ -932,5 +942,7 @@ k = a[b::d]
 k = a[:c:d]
 k = a[b:c]
 def g(l: T, g: T = 10, *b: T) -> Optional[*T]: pass
-""")
-    print(_LuaTranspiler(luau=True).visit(c))
+k = a + (lambda x: x + a)(2) + 3
+"""
+    print(lua_transpiler(c, luau=True))
+
