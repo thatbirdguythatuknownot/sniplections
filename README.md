@@ -57,8 +57,8 @@ Multinomial theorem expander.
 **pylua.py**<br/>
 Python to Lua transpiler. To use, do this:
 ```py
-from pylua import _LuaTranspiler
+from pylua import lua_transpiler
 python_code_as_string = ...
-unparsed_vanilla_lua_code = _LuaTranspiler(luau=False).visit(parse(python_code_as_string))
-unparsed_roblox_lua_code = _LuaTranspiler(luau=True).visit(parse(python_code_as_string))
+unparsed_vanilla_lua_code = lua_transpiler(python_code_as_string)
+unparsed_roblox_lua_code = lua_transpiler(python_code_as_string, luau=True)
 ```
