@@ -38,6 +38,7 @@ class _LuaTranspiler(_Unparser):
         self._indent = 0
         self._had_handler = False
         self._is_call = False
+        self._is_type_return = False
         self.luau = luau
     def interleave_write(self, inter, f, seq):
         seq = iter(seq)
@@ -386,7 +387,9 @@ class _LuaTranspiler(_Unparser):
             self.traverse(node.args)
         if node.returns:
             self.write(": " if self.luau else " -- type: ")
+            self._is_type_return = True
             self.type_traverse(node.returns)
+            self._is_type_return = False
         with self.block_end((self.get_type_comment(node) or "").replace("#", "--", 1)):
             if docstring := self.get_raw_docstring(node):
                 self._write_docstring(docstring)
@@ -496,7 +499,7 @@ class _LuaTranspiler(_Unparser):
     def visit_Name(self, node):
         self.write(node.id)
     def type_visit_Name(self, node):
-        self.write(_luau_type.get(node.id, node.id))
+        self.write(self._luau_type.get(node.id, node.id))
     def _write_docstring(self, node):
         self.fill("--")
         self._write_str_avoiding_backslashes(node.value, quote_types=_ALL_QUOTES)
@@ -589,8 +592,19 @@ class _LuaTranspiler(_Unparser):
             self.interleave(
                 lambda: self.write(", "), write_item, zip(node.keys, node.values)
             )
-    type_visit_Dict = _Unparser.visit_Dict
-    visit_Tuple = visit_List
+    def type_visit_Dict(self, node):
+        old_traverse, self.traverse = self.traverse, self.type_traverse
+        _Unparser.visit_Dict(self, node)
+        self.traverse = old_traverse
+    def type_visit_Tuple(self, node):
+        if self._is_type_return:
+            self._is_type_return = False
+            with self.delimit("(", ")"):
+                self.interleave(lambda: self.write(", "), self.type_traverse, node.elts)
+        else:
+            old_traverse, self.traverse = self.traverse, self.type_traverse
+            self.visit_List(node)
+            self.traverse = old_traverse
     unop = {"Invert": "~", "Not": "not ", "UAdd": "+", "USub": "-"}
     def visit_UnaryOp(self, node):
         operator = self.unop[node.op.__class__.__name__]
@@ -793,13 +807,32 @@ class _LuaTranspiler(_Unparser):
         if is_parenthesized:
             self.write(")")
     def type_visit_Subscript(self, node):
-        if isinstance(node.value, Name) and node.value.id == "Optional":
-            val = node.slice
-            if isinstance(val, Tuple) and len(val.elts) == 1 and isinstance(val.elts[0], Starred):
-                val = val.elts[0]
-            self.set_precedence(_Precedence.ATOM, val)
-            self.type_traverse(val)
-            self.write("?")
+        if isinstance(node.value, Name):
+            if node.value.id == "Optional":
+                val = node.slice
+                if isinstance(val, Tuple) and len(val.elts) == 1 and isinstance(val.elts[0], Starred):
+                    val = val.elts[0]
+                self.set_precedence(_Precedence.ATOM, val)
+                self.type_traverse(val)
+                self.write("?")
+                return
+            elif node.value.id in ("List", "list"):
+                with self.delimit("{", "}"):
+                    if isinstance(node.slice, (Tuple, Slice)):
+                        raise NotImplementedError("list type subscript with tuple/slice is not supported")
+                    else:
+                        self.interleave(lambda: self.write(", "), self.type_traverse, node.slice)
+                return
+            elif node.value.id in ("Tuple", "tuple") and self._is_type_return:
+                self._is_type_return = False
+                with self.delimit("(", ")"):
+                    if isinstance(node.slice, Tuple):
+                        self.interleave(lambda: self.write(", "), self.type_traverse, node.slice.elts)
+                    elif isinstance(node.slice, Slice):
+                        raise NotImplementedError("tuple type subscript with slice is not supported")
+                    else:
+                        self.interleave(lambda: self.write(", "), self.type_traverse, node.slice)
+                return
         else:
             if isinstance(node.slice, (Tuple, Slice)):
                 raise NotImplementedError("tuple and slice subscripts are not supported")
@@ -819,8 +852,11 @@ class _LuaTranspiler(_Unparser):
     def visit_Starred(self, node):
         self._starred_handler(node.value)
     def type_visit_Starred(self, node):
-        self.write("...")
-        self.type_traverse(node.value)
+        if isinstance(node.value, Name) and node.value.id in self._luau_type:
+            self.write(f"...{node.value.id}")
+        else:
+            self.type_traverse(node.value)
+            self.write("...")
     def visit_Ellipsis(self, node):
         self.write("...")
     def visit_Slice(self, node):
@@ -935,7 +971,7 @@ finally:
     print("hmm")
 @ah + 2
 @hm[3]
-def v(): return 7 + 7
+def v() -> str: return 7 + 7
 for a, b, c in {1, 2, 3}: print(a, b, c)
 for x in {1, 2, 7}: print(x)
 if 5: print('yes')
@@ -955,7 +991,7 @@ k = a[b:c:d]
 k = a[b::d]
 k = a[:c:d]
 k = a[b:c]
-def g(l: T, g: T = 10, *b: T) -> Optional[*T]: pass
+def g(l: T, g: T = 10, *b: T) -> Tuple[*T] | Optional[T]: pass
 k = a + (lambda x: x + a)(2) + 3
 k = f'haha... {o @ hell @ no} ...oh'
 """
