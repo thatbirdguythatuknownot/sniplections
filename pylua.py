@@ -489,9 +489,14 @@ class _LuaTranspiler(_Unparser):
         "int": "number",
         "float": "number",
         "bool": "boolean",
+        "string": "string_",
+        "number": "number_",
+        "boolean": "boolean_",
     }
     def visit_Name(self, node):
         self.write(node.id)
+    def type_visit_Name(self, node):
+        self.write(_luau_type.get(node.id, node.id))
     def _write_docstring(self, node):
         self.fill("--")
         self._write_str_avoiding_backslashes(node.value, quote_types=_ALL_QUOTES)
