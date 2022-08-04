@@ -31,12 +31,11 @@ class _Precedence:
 _ALL_QUOTES = (*_SINGLE_QUOTES, "[[")
 
 class _LuaTranspiler(_Unparser):
-    def __init__(self, *, _avoid_backslashes=False, luau=False):
+    def __init__(self, *, luau=False):
         self._source = []
         self._precedences = {}
         self._type_ignores = {}
         self._indent = 0
-        self._avoid_backslashes = _avoid_backslashes
         self._had_handler = False
         self._is_call = False
         self.luau = luau
@@ -73,12 +72,12 @@ class _LuaTranspiler(_Unparser):
         yield
         self._indent -= 1
         self.fill("end")
-    _luau_type = {
-        "str": "string",
-        "int": "number",
-        "float": "number",
-        "bool": "boolean",
-    }
+    def copy_change_node_ctx(self, node, ctx):
+        node_copy = deepcopy(node)
+        for node_ in walk(node_copy):
+            if hasattr(node_, "ctx"):
+                node_.ctx = ctx()
+        return node_copy
     def traverse(self, node, apply_func=lambda x: None):
         if isinstance(node, list):
             for item in node:
@@ -227,11 +226,7 @@ class _LuaTranspiler(_Unparser):
             self.traverse(target, self.assignment_apply)
             self.write(" = ")
             self.traverse(prev_target)
-            target = deepcopy(target)
-            for node_ in walk(target):
-                if hasattr(node_, "ctx"):
-                    node_.ctx = Load()
-            prev_target = target
+            prev_target = self.copy_change_node_ctx(target, Load)
         if type_comment := self.get_type_comment(node):
             self.write(type_comment.replace("#", "--", 1))
     def visit_AugAssign(self, node):
@@ -239,10 +234,7 @@ class _LuaTranspiler(_Unparser):
         self.traverse(node.target)
         if self.luau:
             if (op := node.op.__class__.__name__) in self.bitwise_replacements:
-                target = deepcopy(node.target)
-                for node_ in walk(target):
-                    if hasattr(node_, "ctx"):
-                        node_.ctx = Load()
+                target = self.copy_change_node_ctx(node.target, Load)
                 self.write(" = ")
                 with self.delimit(f"{self.bitwise_replacements[op]}(", ")"):
                     self.traverse(target)
@@ -252,10 +244,7 @@ class _LuaTranspiler(_Unparser):
                 self.write(f" {self.binop[op]}= ")
                 self.traverse(node.value)
         else:
-            target = deepcopy(node.target)
-            for node_ in walk(target):
-                if hasattr(node_, "ctx"):
-                    node_.ctx = Load()
+            target = self.copy_change_node_ctx(node.target, Load)
             self.write(" = ")
             self.traverse(target)
             self.write(f" {self.binop[node.op.__class__.__name__]} ")
@@ -478,9 +467,29 @@ class _LuaTranspiler(_Unparser):
         else:
             self.write(f"{quote_type}{string}{quote_type}")
     def visit_JoinedStr(self, node):
-        raise NotImplementedError("f-strings are not yet supported")
+        first = True
+        for value in node.values:
+            if first:
+                first = False
+            else:
+                self.write(" .. ")
+            if isinstance(value, Constant) and isinstance(value.value, str):
+                self._write_str_avoiding_backslashes(value.value)
+            elif isinstance(value, FormattedValue):
+                self.visit_FormattedValue(value)
+            else:
+                raise ValueError(f"Unexpected node inside JoinedStr, {value!r}")
     def visit_FormattedValue(self, node):
-        raise NotImplementedError("f-strings are not yet supported")
+        if node.format_spec:
+            raise NotImplementedError("format specifier in f-strings is not yet implemented")
+        self.set_precedence(_Precedence.CONCAT, node.value)
+        self.traverse(node.value)
+    _luau_type = {
+        "str": "string",
+        "int": "number",
+        "float": "number",
+        "bool": "boolean",
+    }
     def visit_Name(self, node):
         self.write(node.id)
     def _write_docstring(self, node):
@@ -630,7 +639,7 @@ class _LuaTranspiler(_Unparser):
     binop_rassoc = frozenset(("^", ".."))
     def visit_BinOp(self, node):
         operator_name = node.op.__class__.__name__
-        if operator_name == "MatMul":
+        if operator_name == "MatMult":
             print("Lua transpiler warning: @ (left-associative matrix "
                   "multiplication) is being used for .. (right-associative "
                   "string concatenation)", flush=True)
@@ -883,8 +892,8 @@ class _LuaTranspiler(_Unparser):
         raise NotImplementedError("match-case patterns are not supported")
     visit_MatchOr = visit_MatchAs = visit_MatchClass = visit_MatchMapping = visit_MatchStar = visit_MatchSequence
 
-def lua_transpiler(str_code, luau=False):
-    return _LuaTranspiler(luau=luau).visit(parse(str_code))
+def lua_transpiler(str_code, *, luau=False, **parser_kwargs):
+    return _LuaTranspiler(luau=luau).visit(parse(str_code, **parser_kwargs))
 
 if __name__ == "__main__":
     c = """
@@ -943,6 +952,7 @@ k = a[:c:d]
 k = a[b:c]
 def g(l: T, g: T = 10, *b: T) -> Optional[*T]: pass
 k = a + (lambda x: x + a)(2) + 3
+k = f'haha... {o @ hell @ no} ...oh'
 """
     print(lua_transpiler(c, luau=True))
 
