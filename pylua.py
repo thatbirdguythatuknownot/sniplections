@@ -97,7 +97,10 @@ class _LuaTranspiler(_Unparser):
         method = f"visit_{node.__class__.__name__}"
         visitor = getattr(self, f"type_{method}", None)
         if not visitor:
-            visitor = getattr(self, method, self.type_generic_visit)
+            old_traverse, self.traverse = self.traverse, self.type_traverse
+            res = getattr(self, method, self.type_generic_visit)(node)
+            self.traverse = old_traverse
+            return res
         return visitor(node)
     def type_generic_visit(self, node):
         for field, value in iter_fields(node):
@@ -129,7 +132,8 @@ class _LuaTranspiler(_Unparser):
         self.traverse(node.value)
     def visit_NamedExpr(self, node):
         raise NotImplementedError("named expressions are currently not supported")
-    def import_process(self, subnames):
+    def import_process(self, subnames_alias):
+        subnames, alias_ = subnames_alias
         if self.luau:
             res = f"require(script.Parent.{'.'.join(subnames)})"
         else:
@@ -139,14 +143,16 @@ class _LuaTranspiler(_Unparser):
             while subnames and (subname := subnames.pop()):
                 res = f"{{{subname} = {res}}}"
         elif subnames[0] in ("math", "os"):
-            res = ""
+            if alias_ == subnames[0]:
+                res = ""
+            else:
+                res = subnames[0]
         return res
     def visit_Import(self, node):
         self.fill("local ")
-        names = [name.name.split('.') for name in node.names]
-        self.interleave_write(lambda: self.write(", "), lambda x: x[0]*(x[0] not in ("math", "os")), names)
+        self.interleave_write(lambda: self.write(", "), lambda x: x.asname if (x.asname or x.name) != x.name else "_"*(x.name not in ("math", "os")), node.names)
         self.write(" = ")
-        self.interleave_write(lambda: self.write(", "), self.import_process, names)
+        self.interleave_write(lambda: self.write(", "), self.import_process, [(name.name.split('.'), name.asname or name.name) for name in node.names])
     def visit_ImportFrom(self, node):
         if node.level > 1:
             if self.luau:
@@ -163,10 +169,9 @@ class _LuaTranspiler(_Unparser):
                 res = "script.Parent"
             else:
                 res = "./"
-        names = [name.name for name in node.names]
-        if not node.level and node.module in ("math", "os") and (len(names) != 1 or names[0] != "*"):
-            for x in names:
-                self.fill(f"local {x} = {node.module}.{x}")
+        if not node.level and node.module in ("math", "os") and (len(node.names) != 1 or node.names[0].name != "*"):
+            for x in node.names:
+                self.fill(f"local {x.asname or x.name} = {node.module}.{x.name}")
             return
         self.fill()
         with self.block_end("do"):
@@ -177,7 +182,7 @@ class _LuaTranspiler(_Unparser):
                 else:
                     res = f'dofile("{res}{{}}.lua")'
                 res = res.format(node.module)
-                if len(names) == 1 and names[0] == "*":
+                if len(node.names) == 1 and node.names[0].name == "*":
                     if not node.level and node.module in ("math", "os"):
                         res = node.module
                     self.fill(f"for k, v in {res} ")
@@ -185,11 +190,11 @@ class _LuaTranspiler(_Unparser):
                         self.fill("env[k] = v")
                 else:
                     self.fill(f"local mod = {res}")
-                    for x in names:
-                        self.fill(f"env.{x} = mod.{x}")
+                    for x in node.names:
+                        self.fill(f"env.{x.asname or x.name} = mod.{x.name}")
             else:
                 if self.luau:
-                    if len(names) == 1 and names[0] == "*":
+                    if len(node.names) == 1 and node.names[0].name == "*":
                         self.fill(f"for k, v in {res}:GetChildren() ")
                         with self.block_end("do"):
                             self.fill("if v:IsA('ModuleScript') ")
@@ -197,14 +202,14 @@ class _LuaTranspiler(_Unparser):
                                 self.fill(f"env[k] = require(v)")
                     else:
                         self.fill(f"local inst = {res}")
-                        for x in names:
-                            self.fill(f"env.{x} = require(inst.{x})")
+                        for x in node.names:
+                            self.fill(f"env.{x.asname or x.name} = require(inst.{x.name})")
                 else:
-                    if len(names) == 1 and names[0] == "*":
+                    if len(node.names) == 1 and node.names[0].name == "*":
                         raise NotImplementedError("from ... import * not yet supported")
                     else:
-                        for x in names:
-                            self.fill(f'env.{x} = dofile("{res}{x}.lua")')
+                        for x in node.names:
+                            self.fill(f'env.{x.asname or x.name} = dofile("{res}{x.name}.lua")')
     def assignment_apply(self, node):
         if isinstance(node, Starred):
             if isinstance(node.value, (List, Tuple)):
@@ -282,7 +287,7 @@ class _LuaTranspiler(_Unparser):
                 self.write(": ")
                 self.type_traverse(node.annotation)
                 return
-            self.write(" --> ")
+            self.write(" -- type: ")
             self.type_traverse(node.annotation)
     def visit_Pass(self, node):
         pass
@@ -391,10 +396,23 @@ class _LuaTranspiler(_Unparser):
         with self.delimit("(", ")"):
             self.traverse(node.args)
         if node.returns:
-            self.write(": " if self.luau else " --> ")
+            self.write(": " if self.luau else " -- type: ")
             self.type_traverse(node.returns)
         with self.block_end((self.get_type_comment(node) or "").replace("#", "--", 1)):
-            self._write_docstring_and_traverse_body(node)
+            if docstring := self.get_raw_docstring(node):
+                self._write_docstring(docstring)
+            if (params := node.args).defaults or params.kw_defaults:
+                args = params.posonlyargs + params.args
+                for arg, default in zip(
+                        args + params.kwonlyargs,
+                        [None] * (len(args) - len(params.defaults)) + params.defaults + params.kw_defaults
+                ):
+                    if default:
+                        self.fill(f"if {arg.arg} == nil ")
+                        with self.block_end("then"):
+                            self.fill(f"{arg.arg} = ")
+                            self.traverse(default)
+            self.traverse(node.body)
         if node.decorator_list:
             self.write(")" * len(node.decorator_list))
     def visit_AsyncFunctionDef(self, node):
@@ -489,7 +507,7 @@ class _LuaTranspiler(_Unparser):
             with self.delimit("{", "}"):
                 self.items_view(self._write_constant, value)
         elif value is ...:
-            self._write_str_avoiding_backslashes("...")
+            self.write("...")
         elif value is None:
             self.write("nil")
         else:
@@ -539,7 +557,7 @@ class _LuaTranspiler(_Unparser):
     visit_Set = visit_List
     def visit_Dict(self, node):
         def write_key_value_pair(k, v):
-            if isinstance(k, Constant) and isinstance(k.value, str):
+            if isinstance(k, Constant) and isinstance(k.value, str) and k.value.isalpha():
                 self.write(f"{k.value} = ")
             else:
                 with self.delimit("[", "]"):
@@ -557,10 +575,14 @@ class _LuaTranspiler(_Unparser):
             self.interleave(
                 lambda: self.write(", "), write_item, zip(node.keys, node.values)
             )
+    type_visit_Dict = _Unparser.visit_Dict
     visit_Tuple = visit_List
     unop = {"Invert": "~", "Not": "not ", "UAdd": "+", "USub": "-"}
     def visit_UnaryOp(self, node):
         operator = self.unop[node.op.__class__.__name__]
+        if operator == "+":
+            self.traverse(node.operand)
+            return
         if self.luau and operator == "~":
             with self.delimit("bit32.bnot(", ")"):
                 self.set_precedence(_Precedence.TEST, node.operand)
@@ -636,6 +658,24 @@ class _LuaTranspiler(_Unparser):
             self.write(f" {operator} ")
             self.set_precedence(right_precedence, node.right)
             self.traverse(node.right)
+    def type_visit_BinOp(self, node):
+        operator_name = node.op.__class__.__name__
+        if operator_name not in ("BitOr", "BitAnd"):
+            raise NotImplementedError("type operations other than | or & are not supported")
+        operator = self.binop[operator_name]
+        operator_precedence = self.binop_precedence[operator]
+        with self.require_parens(operator_precedence, node):
+            if operator in self.binop_rassoc:
+                left_precedence = operator_precedence.next()
+                right_precedence = operator_precedence
+            else:
+                left_precedence = operator_precedence
+                right_precedence = operator_precedence.next()
+            self.set_precedence(left_precedence, node.left)
+            self.type_traverse(node.left)
+            self.write(f" {operator} ")
+            self.set_precedence(right_precedence, node.right)
+            self.type_traverse(node.right)
     cmpops = {
         "Eq": "==",
         "NotEq": "~=",
@@ -708,34 +748,67 @@ class _LuaTranspiler(_Unparser):
     def visit_Subscript(self, node):
         self.set_precedence(_Precedence.ATOM, node.value)
         start = len(self._source)
+        is_parenthesized = False
         with self.delimit_if("(", ")", isinstance(node.value, (Constant, List, Tuple, Set, Dict))):
             self.traverse(node.value)
         if isinstance(node.slice, Tuple):
-            raise NotImplementedError("tuple slices are not supported")
-        elif not isinstance(node.slice, Slice):
+            raise NotImplementedError("tuple subscripts are not supported")
+        if isinstance(node.ctx, (Store, Del)):
+            if isinstance(node.slice, Constant) and isinstance(node.slice.value, str) and node.slice.value.isalpha():
+                self.write(f".{node.slice.value}")
+            else:
+                with self.delimit("[", "]"):
+                    self.traverse(node.slice)
+            return
+        if not isinstance(node.slice, Slice):
             end = len(self._source)
-            with self.delimit("[", "]"):
-                self.traverse(node.slice)
+            if isinstance(node.slice, Constant) and isinstance(node.slice.value, str) and node.slice.value.isalpha():
+                self.write(f".{node.slice.value}")
+            else:
+                with self.delimit("[", "]"):
+                    self.traverse(node.slice)
             self.write(" or ")
             self._source += self._source[start:end]
+            self._source.insert(start, "(")
+            is_parenthesized = True
         with self.delimit(":sub(", ")"):
             self.traverse(node.slice)
             if not isinstance(node.slice, Slice):
                 self.write(", ")
                 self.traverse(node.slice)
-    def visit_Starred(self, node):
-        if isinstance(node.value, (List, Tuple, Set)):
-            self.traverse(node.value.elts)
-        elif isinstance(node.value, Constant) and isinstance(node.value.value, str):
-            self.interleave_write(lambda: self.write(", "), ascii, node.value.value)
-        elif not isinstance(node.value, Call):
-            with self.delimit("table.unpack(", ")"):
-                self.traverse(node.value)
+        if is_parenthesized:
+            self.write(")")
+    def type_visit_Subscript(self, node):
+        if isinstance(node.value, Name) and node.value.id == "Optional":
+            val = node.slice
+            if isinstance(val, Tuple) and len(val.elts) == 1 and isinstance(val.elts[0], Starred):
+                val = val.elts[0]
+            self.set_precedence(_Precedence.ATOM, val)
+            self.type_traverse(val)
+            self.write("?")
         else:
+            if isinstance(node.slice, (Tuple, Slice)):
+                raise NotImplementedError("tuple and slice subscripts are not supported")
+            with self.delimit("[", "]"):
+                self.type_traverse(node.slice)
+    def _starred_handler(self, val):
+        if isinstance(val, (List, Tuple, Set)):
+            self.traverse(val.elts)
+        elif isinstance(val, Constant) and isinstance(val.value, str):
+            self.interleave_write(lambda: self.write(", "), ascii, val.value)
+        elif isinstance(val, Call):
             print("warning: starred expression is ignored")
-            self.traverse(node.value)
+            self.traverse(val)
+        else:
+            with self.delimit("table.unpack(", ")"):
+                self.traverse(val)
+    def visit_Starred(self, node):
+        self._starred_handler(node.value)
+    def type_visit_Starred(self, node):
+        self.write("...")
+        self.type_traverse(node.value)
     def visit_Ellipsis(self, node):
-        self._write_str_avoiding_backslashes("...")
+        self.write("...")
     def visit_Slice(self, node):
         if node.lower:
             self.traverse(node.lower)
@@ -751,15 +824,66 @@ class _LuaTranspiler(_Unparser):
             self.traverse(node.step)
     def visit_Match(self, node):
         raise NotImplementedError("match cases are not supported")
+    def visit_arg(self, node):
+        self.write(node.arg)
+        if node.annotation:
+            if self.luau:
+                self.write(": ")
+                self.type_traverse(node.annotation)
+            else:
+                with self.delimit(" --[[type: ", "]]"):
+                    self.type_traverse(node.annotation)
+    def visit_arguments(self, node):
+        first = True
+        for element in node.posonlyargs + node.args + node.kwonlyargs:
+            if first:
+                first = False
+            else:
+                self.write(", ")
+            self.traverse(element)
+        if node.vararg:
+            if node.kwonlyargs or node.kwarg:
+                raise NotImplementedError("arguments after vararg are not supported")
+            if first:
+                first = False
+            else:
+                self.write(", ")
+            print(f"warning: vararg {node.vararg.arg} will be converted into unnamed ellipsis")
+            self.write("...")
+            if node.vararg.annotation:
+                if self.luau:
+                    self.write(": ")
+                    self.type_traverse(node.vararg.annotation)
+                else:
+                    with self.delimit(" --[[type: ", "]]"):
+                        self.type_traverse(node.vararg.annotation)
+    def visit_keyword(self, node):
+        print("warning: kwargs will turn into normal vargs and keywords into normal args")
+        if node.arg is None:
+            self._starred_handler(node.value)
+        else:
+            with self.delimit("--[[", "=]] "):
+                self.write(node.arg)
+            self.traverse(node.value)
+    def visit_Lambda(self, node):
+        with self.delimit("(function(", ")"):
+            self.traverse(node.args)
+        with self.block_end():
+            self.fill("return ")
+            self.set_precedence(_Precedence.TEST, node.body)
+            self.traverse(node.body)
+        self.write(")")
+    def visit_alias(self, node):
+        raise NotImplementedError("alias should not be handled outside of Import/ImportFrom")
 
 if __name__ == "__main__":
     c = parse("""
-from . import a
-from g import a, b, c
+from . import a as d
+from g import a as b, b as c, c as d
 from l import *
 from math import *
 from math import sqrt, cbrt
-import math, os, hi
+import math, math as l, os, hi, os as gl
 a, *[b, c.d], d = 5
 a[b] &= 7
 a[b] += 3
@@ -767,7 +891,7 @@ a: s = 3
 a[b]: g = 7
 a[b]: g
 del g
-del a, b[c], d
+del a, b['c'], d
 assert ahh
 assert 7 == 2, "what"
 raise "hm'm" from 'ah"h'
@@ -794,18 +918,19 @@ if 5: print('yes')
 elif 7: print('ye')
 else: print('y')
 while True: pass
-5 if 10 else 7 if 3 else 2
-{1: 3, 'b': 'ha', True: False}
-+((a >> b) % c)
-a is b is c == d != e < f > g >= h <= i
-a + b and a + b and a + b and a + b and a + b and a + b and a + b and a + b and a + b and a + b and a + b and a + b and a + b and a + b and a + b and a + b
-a + b or a + b or a + b or a + b or a + b or a + b or a + b or a + b or a + b or a + b or a + b or a + b or a + b or a + b or a + b or a + b
-a.b
-a.b(*a, *b, *[c, d], *'efg')
-a[b]
-a[b:c:d]
-a[b::d]
-a[:c:d]
-a[b:c]
+k = 5 if 10 else 7 if 3 else 2
+k = {1: 3, 'b': 'ha', True: False}
+k = +((a >> b) % c)
+k = a is b is c == d != e < f > g >= h <= i
+k = a + b and a + b and a + b and a + b and a + b and a + b and a + b and a + b and a + b and a + b and a + b and a + b and a + b and a + b and a + b and a + b
+k = a + b or a + b or a + b or a + b or a + b or a + b or a + b or a + b or a + b or a + b or a + b or a + b or a + b or a + b or a + b or a + b
+k = a.b
+a.b(*a, *b, *[c, d], *'efg', *m, h=i, j=k, **l)
+k = a[b]
+k = a[b:c:d]
+k = a[b::d]
+k = a[:c:d]
+k = a[b:c]
+def g(l: T, g: T = 10, *b: T) -> Optional[*T]: pass
 """)
-    print(_LuaTranspiler(luau=False).visit(c))
+    print(_LuaTranspiler(luau=True).visit(c))
