@@ -1,5 +1,5 @@
 # sniplections
-Collection of python snippets and tricks.
+Collection of various snippets/files that I made.
 
 
 **safe_eval.py**<br/>
