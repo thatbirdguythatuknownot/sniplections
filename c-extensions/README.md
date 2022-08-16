@@ -32,3 +32,6 @@ Compiled with these commands:
 clang -c -I"C:\Program Files\Python311\include" -fopenmp=libiomp5 -Ofast -march=core-avx2 -Rpass-analysis=vectorize c.c -o c.o
 clang -fopenmp=libiomp5 -Ofast -march=core-avx2 -shared -o "C:\Program Files\Python311\Lib\c.pyd" c.o -l"Python311" -L"C:\Program Files\Python311\libs"
 ```
+
+**md5.c**<br/>
+A module for `md5` hashing functions. Compiled with the same commands as `c.c` above.
