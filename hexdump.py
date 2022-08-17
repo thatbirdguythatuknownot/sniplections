@@ -9,7 +9,7 @@ offset_format = "{:08x}"
 format = "{:02x}"
 length_ordinal = 2
 valid_formats = {"x", "X", "d", "D", "b", "B", "o", "O"}
-option_name_to_option = {'format': '-f', 'offset': '-o'}
+option_name_to_option = {'format': '-f', 'offset': '-t', 'output': '-o'}
 help_message = """HEXDUMP PROGRAM
 Usage:
 hexdump [options] file[.extension]/.extension
@@ -23,7 +23,8 @@ Options:
     d = D = decimal format for numbers (right-aligned for offsets)
     X = uppercase hex format for numbers (right-aligned, zero-filled for offsets)
     x = lowercase hex format for numbers (right-aligned, zero-filled for offsets) [DEFAULT]
--o = how many characters in a dump line/offset number [DEFAULT 16]
+-t = how many characters in a dump line/offset number [DEFAULT 16]
+-o = where to place output [DEFAULT stderr]
 
 """
 options = sys.argv[1:]
@@ -52,9 +53,9 @@ if '-f' in options_set:
     else:
         need_input.append((i, 'format'))
 
-if '-o' in options_set:
-    i = options.index('-o')
-    options.remove('-o')
+if '-t' in options_set:
+    i = options.index('-t')
+    options.remove('-t')
     if options[i].isascii() and options[i].isdigit():
         key = options[i]
         options.remove(key)
@@ -72,6 +73,20 @@ if (not has_help) and '-?' in options_set:
     options.remove('-?')
     has_help = 1
     print_noline(help_message)
+
+file_out = None
+if '-o' in options_set:
+    i = options.index('-o')
+    options.remove('-o')
+    try:
+        file_out = open(options[i], "w")
+    except FileNotFoundError:
+        print(f"file {repr(options[i])} not found; defaulting to stderr")
+    except OSError as e:
+        print(f"{type(e).__name__}: {e}")
+        print("defaulting to stderr")
+    else:
+        print_noline = file_out.write
 
 need_input.sort(key=lambda x: x[0])
 for _, x in need_input:
@@ -92,7 +107,7 @@ for _, x in need_input:
         if inp.isascii() and inp.isdigit():
             offset = int(inp)
         else:
-            print("Invalid input for option '-o': {inp!r}")
+            print("Invalid input for option '-t': {inp!r}")
             sys.exit(1)
     else:
         print(f"internal error: invalid option '{x}'")
@@ -128,3 +143,6 @@ with open(path, "r") as file:
         print_noline(f":  {hex}  |{filtered_contents}|\n")
         position += len(contents)
         print_noline(offset_format.format(position))
+
+if file_out:
+    file_out.close()
