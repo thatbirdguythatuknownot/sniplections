@@ -30,6 +30,7 @@ Options:
 options = sys.argv[1:]
 if not options:
     print("Cannot execute hexdump with no inputs")
+    print_noline(help_message)
     sys.exit(1)
 
 options_set = {*options}
@@ -80,8 +81,6 @@ if '-o' in options_set:
     options.remove('-o')
     try:
         file_out = open(options[i], "w")
-    except FileNotFoundError:
-        print(f"file {repr(options[i])} not found; defaulting to stderr")
     except OSError as e:
         print(f"{type(e).__name__}: {e}")
         print("defaulting to stderr")
