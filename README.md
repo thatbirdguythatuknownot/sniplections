@@ -62,3 +62,20 @@ python_code_as_string = ...
 unparsed_vanilla_lua_code = lua_transpiler(python_code_as_string)
 unparsed_roblox_lua_code = lua_transpiler(python_code_as_string, luau=True)
 ```
+
+**dynamic_dispatch.py**<br/>
+Overloading for Python functions. To be used like this:
+```py
+@dynamic_dispatch
+def baz(x: int, y: int) -> int:
+    return x + y
+
+@dynamic_dispatch
+def baz(x: int, y: float) -> float:
+    return x * y
+
+print(baz(2, 3)) # baz(x: int, y: int)
+                 # output: 5
+print(baz(2, 7.5)) # baz(x: int, y: float)
+                   # output: 15.0
+```
