@@ -6,6 +6,7 @@ try:
 except re_error:
     from regex import compile as pcompile, sub
     pcompile(r'\$(\w+)(\((?:[^()]++|(?0))*+\))?\$')
+
 match_macros = macropattern.finditer
 has_macro = macropattern.search
 
