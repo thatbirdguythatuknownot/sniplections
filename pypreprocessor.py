@@ -2,10 +2,10 @@ import string
 from re import compile as pcompile, sub, error as re_error
 letters = {*string.ascii_letters}
 try:
-    macropattern = pcompile(r'\$(\w+)(\((?:[^()]++|(?0))*+\))?\$')
+    macropattern = pcompile(r'\$(\w+)(\((?:[^()]++|\2)*+\))?\$')
 except re_error:
     from regex import compile as pcompile, sub
-    pcompile(r'\$(\w+)(\((?:[^()]++|(?0))*+\))?\$')
+    macropattern = pcompile(r'\$(\w+)(\((?:[^()]++|(?0))*+\))?\$')
 
 match_macros = macropattern.finditer
 has_macro = macropattern.search
