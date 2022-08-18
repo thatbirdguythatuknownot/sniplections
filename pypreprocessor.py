@@ -1,13 +1,7 @@
 import string
-from re import compile as pcompile, sub, error as re_error
+from regex import compile as pcompile, sub
 letters = {*string.ascii_letters}
-try:
-    macropattern = pcompile(r'\$(\w+)(\((?:[^()]++|(?R))*+\))?\$')
-except re_error:
-    from regex import compile as pcompile, sub
-    macropattern = pcompile(r'\$(\w+)(\((?:[^()]++|(?0))*+\))?\$')
-
-match_macros = macropattern.finditer
+macropattern = pcompile(r'\$(\w+)(\((?:[^()]++|(?0))*+\))?\$')
 has_macro = macropattern.search
 
 DEFAULT_DEFINE = {'_LINE': None, '_FILE': False}
@@ -206,31 +200,30 @@ def py_preprocessor(s, filename='<string>'):
             POP_IF_DIRECTIVE()
             NEW_ITERQUEUE_ENTRY(x[6:])
         else:
-            while has_macro(x):
+            while pat := has_macro(x):
                 minus_pos = 0
-                for pat in match_macros(x):
-                    name, args = pat.groups()
-                    if args:
-                        assert name in funcdefines, f"macro name '{name}' is not a macro function name in line {i+1}"
-                        args = list(map(str.strip, args[1:-1].split(',')))
-                        if args and args[-1] == '':
-                            args = args[:-1]
-                        assert all(args), f"cannot have empty argument in macro function call to {name} in line {i+1}"
-                        param_list, replacement = funcdefines[name]
-                        assert len(param_list) == len(args), f"length of arguments in macro function call to {name} does not match parameters length in line {i+1}"
-                        for arg, param in zip(args, param_list):
-                            replacement = sub(f"`{param}`", arg, replacement)
-                        x = x[:pat.start()] + replacement + x[pat.end():]
-                    else:
-                        assert name in defines, f"macro name '{name}' is not a macro name in line {i+1}"
-                        x = (x[:(patst := pat.start()) - minus_pos]
-                            + (repl := f"{i + 1}"
-                               if defines[name] is None
-                               else (f"{filename!r}"
-                                     if defines[name] is False
-                                     else defines[name]))
-                            + x[(patnd := pat.end()) - minus_pos:])
-                        minus_pos += (patnd - patst) - len(repl)
+                name, args = pat.groups()
+                if args:
+                    assert name in funcdefines, f"macro name '{name}' is not a macro function name in line {i+1}"
+                    args = list(map(str.strip, args[1:-1].split(',')))
+                    if args and args[-1] == '':
+                        args = args[:-1]
+                    assert all(args), f"cannot have empty argument in macro function call to {name} in line {i+1}"
+                    param_list, replacement = funcdefines[name]
+                    assert len(param_list) == len(args), f"length of arguments in macro function call to {name} does not match parameters length in line {i+1}"
+                    for arg, param in zip(args, param_list):
+                        replacement = sub(f"`{param}`", arg, replacement)
+                    x = x[:pat.start()] + replacement + x[pat.end():]
+                else:
+                    assert name in defines, f"macro name '{name}' is not a macro name in line {i+1}"
+                    x = (x[:(patst := pat.start()) - minus_pos]
+                        + (repl := f"{i + 1}"
+                           if defines[name] is None
+                           else (f"{filename!r}"
+                                 if defines[name] is False
+                                 else defines[name]))
+                        + x[(patnd := pat.end()) - minus_pos:])
+                    minus_pos += (patnd - patst) - len(repl)
             apn_lines(x)
     return '\n'.join(lines)
 
