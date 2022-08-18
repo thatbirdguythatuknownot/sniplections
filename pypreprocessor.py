@@ -2,7 +2,7 @@ import string
 from re import compile as pcompile, sub, error as re_error
 letters = {*string.ascii_letters}
 try:
-    macropattern = pcompile(r'\$(\w+)(\((?:[^()]++|\2)*+\))?\$')
+    macropattern = pcompile(r'\$(\w+)(\((?:[^()]++|(?R))*+\))?\$')
 except re_error:
     from regex import compile as pcompile, sub
     macropattern = pcompile(r'\$(\w+)(\((?:[^()]++|(?0))*+\))?\$')
