@@ -1,10 +1,13 @@
 # created by <@!856229099952144464> (greyblue92#6547)
 # improved by <@!675937585624776717> (Crowthebird#1649)
 
+import sys
+import traceback
+
 from functools import wraps
 from itertools import islice, takewhile
-from inspect import (signature as get_signature, Parameter,
-                     _VAR_POSITIONAL, _VAR_KEYWORD)
+from inspect import (_VAR_KEYWORD, _VAR_POSITIONAL,
+                     signature as get_signature, Parameter)
 from typing import (Any, Callable, Iterable,
                    Iterator, Mapping, Tuple)
 
@@ -16,6 +19,7 @@ cache: dict[str,
                        tuple[type, ...]]]] = {}
 
 DEFAULT_EXC: Exception = Exception("match not found")
+HAS_EXC_GROUPS: bool = sys.version_info > (3, 11, 0, 'alpha', 3)
 
 def dynamic_dispatch(function: AnyCallable) -> AnyCallable:
     function_key: str = f"{function.__module__}.{function.__qualname__}"
@@ -39,7 +43,10 @@ def dynamic_dispatch(function: AnyCallable) -> AnyCallable:
             try:
                 result = best_match(*args, **kwargs)
             except BaseException as _temp:
-                _temp.add_note(f"{signature}")
+                if HAS_EXC_GROUPS:
+                    _temp.add_note(f"{signature}")
+                else:
+                    _temp = (signature, _temp)
                 if isinstance(err, list):
                     err.append(_temp)
                 elif err is not DEFAULT_EXC:
@@ -49,7 +56,16 @@ def dynamic_dispatch(function: AnyCallable) -> AnyCallable:
             else:
                 return result
         if isinstance(err, list):
-            raise ExceptionGroup("all matches returned an error", err)
+            if HAS_EXC_GROUPS:
+                raise ExceptionGroup("all matches returned an error", err)
+            else:
+                print("all matches returned an error")
+                for signature, exc in err[:-1]:
+                    print(f"ERROR: {signature}")
+                    traceback.print_exception(type(exc), exc, exc.__traceback__)
+                signature, exc = err[-1]
+                print(f"ERROR: {signature}")
+                raise exc
         else:
             raise err
     
@@ -450,3 +466,4 @@ if __name__ == "__main__":
         return x[0] - x[1]
     
     print(f"{baz((5,7,1))=}\n{baz((1,))=}\n{baz((2, 3))=}")
+    baz(5)
