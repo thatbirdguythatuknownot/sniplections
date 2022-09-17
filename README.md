@@ -64,7 +64,7 @@ unparsed_roblox_lua_code = lua_transpiler(python_code_as_string, luau=True)
 ```
 
 **dynamic_dispatch.py**<br/>
-Overloading for Python functions. Only works in versions Python 3.11+. To be used like this:
+Overloading for Python functions. To be used like this:
 ```py
 @dynamic_dispatch
 def baz(x: int, y: int) -> int:
