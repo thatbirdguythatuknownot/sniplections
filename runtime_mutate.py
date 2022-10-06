@@ -36,9 +36,8 @@ def process_extargs_free(code, old_freevars_start):
         i += 2
     return code
 
-def mutate(*bytecode, already_did={*()}):
+def mutate(*bytecode):
     f = sys._getframe(1)
-    if f in already_did: return
     co = f.f_code
     length_bytecode = len(bytecode)
     names = list(co.co_names)
@@ -81,11 +80,9 @@ def mutate(*bytecode, already_did={*()}):
             opcode = opmap[deoptmap.get(name := opname[opcode], name)] # probably isn't necessary
             code.append(opcode)
         else:
-            name = "LOAD_GLOBAL_NULL"
             code.append(LOAD_GLOBAL)
-            code.insert(-1, PUSH_NULL)
-            code.insert(-1, 0)
             name_handler(3, arg)
+            code.extend(b'\0\0' * _inline_cache_entries[LOAD_GLOBAL])
             continue
         if "FAST" in name or opcode is LOAD_CLOSURE:
             length_varnames, _ = lplus_handler(arg, varnames, length_varnames, 0)
@@ -165,7 +162,6 @@ def mutate(*bytecode, already_did={*()}):
     py_object.from_address(frame_base_addr + PTR_SIZE*4).value = co
     Py_INCREF(co)
     c_void_p.from_address(frame_base_addr + PTR_SIZE*7).value = id(co) + SIZE_CodeType + lasti
-    already_did.add(f)
 
 if __name__ == "__main__":
     def uhm():
