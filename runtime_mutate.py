@@ -18,9 +18,6 @@ OBJHEAD_SIZE = object.__basicsize__
 PTR_SIZE = tuple.__itemsize__
 SIZE_CodeType = CodeType.__basicsize__
 
-def poke(addr, data):
-    (c_char * len(data)).from_address(addr)[:] = data
-
 def process_extargs_free(code, old_freevars_start):
     i = 0
     while i < len(code):
