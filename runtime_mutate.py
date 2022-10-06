@@ -181,4 +181,4 @@ if __name__ == "__main__":
     x = 143
     a = 7
     x *= x + a
-    assert(uhm() == x, "mutation failed")
+    assert uhm() == x, "mutation failed"
