@@ -1,5 +1,5 @@
 # sniplections
-Collection of various snippets/files that I made.
+Collection of various snippets/files that I made or improved. Requires a copy-paste or `from file import *` to work properly.
 
 
 **safe_eval.py**<br/>
