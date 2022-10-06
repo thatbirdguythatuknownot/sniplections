@@ -10,7 +10,10 @@ LOAD_GLOBAL_NULL = 256
 LOAD_DEREF_FREE = 257
 STORE_DEREF_FREE = 258
 DELETE_DEREF_FREE = 259
-opname += ["<256>", "LOAD_DEREF_FREE", "STORE_DEREF_FREE", "DELETE_DEREF_FREE"]
+CALL_FUNCTION = 260
+CALL_FUNCTION_KW = 261
+opname += ["<256>", "LOAD_DEREF_FREE", "STORE_DEREF_FREE", "DELETE_DEREF_FREE",
+           "<260>", "<261>"]
 
 binary_ops = [op for _, op in _nb_ops]
 
@@ -75,8 +78,20 @@ def mutate(*bytecode):
             names.append(arg)
             code.append((idx1 << (info >> 1)) | (info & 1))
             idx1 += 1
+    def const_handler(arg):
+        nonlocal idx2
+        try:
+            code.append(consts.index(arg))
+        except ValueError:
+            consts.append(arg)
+            code.append(idx2)
+            idx2 += 1
     for opcode, arg in zip(it := iter(bytecode), it):
-        if opcode is not LOAD_GLOBAL_NULL:
+        if opcode is CALL_FUNCTION or opcode is CALL_FUNCTION_KW:
+            code.extend((PRECALL, arg, *b'\0\0'*_inline_cache_entries[PRECALL],
+                         CALL, arg, *b'\0\0'*_inline_cache_entries[CALL]))
+            continue
+        elif opcode is not LOAD_GLOBAL_NULL:
             opcode = opmap[deoptmap.get(name := opname[opcode], name)] # probably isn't necessary
             code.append(opcode)
         else:
@@ -99,18 +114,13 @@ def mutate(*bytecode):
             length_cellvars, _ = lplus_handler(arg, cellvars, length_cellvars, old_length_varnames)
         elif opcode is LOAD_GLOBAL:
             name_handler(2, arg)
+        elif opcode is LOAD_CONST or opcode is KW_NAMES:
+            const_handler(arg)
         elif ("GLOBAL" in name or "NAME" in name or "ATTR" in name
                 or "LOAD_METHOD" in name):
             name_handler(0, arg)
         elif opcode is BINARY_OP:
             code.append(binary_ops.index(arg))
-        elif opcode is LOAD_CONST:
-            try:
-                code.append(consts.index(arg))
-            except ValueError:
-                consts.append(arg)
-                code.append(idx2)
-                idx2 += 1
         elif opcode < HAVE_ARGUMENT:
             it.__setstate__(length_bytecode - it.__length_hint__() - 1)
             code.append(0)
@@ -158,6 +168,7 @@ def mutate(*bytecode):
                     co_varnames=tuple(varnames), co_cellvars=tuple(cellvars),
                     co_freevars=tuple(freevars), co_consts=tuple(consts),
                     co_names=tuple(names))
+    import dis;dis.dis(co)
     frame_base_addr = c_void_p.from_address(id(f) + OBJHEAD_SIZE + PTR_SIZE).value
     py_object.from_address(frame_base_addr + PTR_SIZE*4).value = co
     Py_INCREF(co)
@@ -174,11 +185,16 @@ if __name__ == "__main__":
             LOAD_FAST,       "a",
             BINARY_OP,       "+",
             BINARY_OP,       "*=",
+            LOAD_GLOBAL,   "print",
+            COPY, 2,
+            LOAD_CONST,      " haha\n",
+            KW_NAMES,        ("end",),
+            CALL_FUNCTION_KW,   1,
+            SWAP,            2,
             STORE_FAST,      "x",
         )
         return x
-
     x = 143
     a = 7
     x *= x + a
-    assert uhm() == x, "mutation failed"
+    assert (res := uhm()) == x, f"mutation failed: {res} != {x}"
