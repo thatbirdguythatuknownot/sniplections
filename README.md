@@ -79,3 +79,24 @@ print(baz(2, 3)) # baz(x: int, y: int)
 print(baz(2, 7.5)) # baz(x: int, y: float)
                    # output: 15.0
 ```
+
+**runtime_mutate.py**<br/>
+(Credits to <@!310449948011528192> (@dzshn#1312) for the original 3.10 code)<br/>
+Mutate code in runtime. Works in 3.11 only. To be used like this:
+```py
+def uhm():
+    x = 143
+    mutate(
+        LOAD_CONST,      7,
+        STORE_FAST,      "a",
+        LOAD_FAST,       "x",
+        COPY,            1,
+        LOAD_FAST,       "a",
+        BINARY_OP,       "+",
+        BINARY_OP,       "*=",
+        STORE_FAST,      "x",
+    )
+    return x
+
+print(uhm()) # 21450
+```
