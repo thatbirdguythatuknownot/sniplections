@@ -1,5 +1,7 @@
-from opcode import opmap, _inline_cache_entries as caches
+import builtins
 import operator
+from dis import dis
+from opcode import opmap, _inline_cache_entries as caches
 
 globals().update(opmap)
 binary_ops = [operator.add, operator.and_, operator.floordiv, operator.lshift,
@@ -315,17 +317,15 @@ def cmp(f):
         return f
  
     print('Original code:')
-    dis.dis(orig)
+    dis(orig)
     print('\nOptimized code:')
-    dis.dis(f)
+    dis(f)
     print('\n')
     return f
 
 builtins.cmp = cmp
 
 if __name__ == '__main__':
-    from dis import dis
-
     s = 5
 
     @inline_globals(check_store=2)
