@@ -124,3 +124,4 @@ print(g(5, 6))
 # `print(s)` (second one): 12
 # result: 30
 ```
+Note that there should not be `s += 7` or `c += 2` in the bytecode.
