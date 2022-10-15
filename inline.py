@@ -252,6 +252,7 @@ def _create_func(f, new_code):
         f.__closure__,
     )
     result.__kwdefaults__ = f.__kwdefaults__
+    result.__qualname__ = f.__qualname__
     result.__orig_func__ = f
     return result
 
