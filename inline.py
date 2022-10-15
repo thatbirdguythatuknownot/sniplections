@@ -304,6 +304,25 @@ def inline_globals(func=None, /, *, check_store=0):
                                                co_consts=co_consts))
     return _inner if func is None else _inner(func)
 
+def cmp(f):
+    print(f'Comparing {f.__qualname__}...')
+    orig = f
+    while hasattr(orig,'__orig_func__'):
+        orig = orig.__orig_func__
+ 
+    if orig is f:
+        print('No difference')
+        return f
+ 
+    print('Original code:')
+    dis.dis(orig)
+    print('\nOptimized code:')
+    dis.dis(f)
+    print('\n')
+    return f
+ 
+builtins.cmp = cmp  # type: ignore[attr-defined]
+
 if __name__ == '__main__':
     from dis import dis
 
