@@ -320,7 +320,7 @@ def cmp(f):
     dis.dis(f)
     print('\n')
     return f
- 
+
 builtins.cmp = cmp
 
 if __name__ == '__main__':
