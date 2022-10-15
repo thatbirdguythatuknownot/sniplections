@@ -321,7 +321,7 @@ def cmp(f):
     print('\n')
     return f
  
-builtins.cmp = cmp  # type: ignore[attr-defined]
+builtins.cmp = cmp
 
 if __name__ == '__main__':
     from dis import dis
