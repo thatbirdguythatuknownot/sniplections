@@ -101,6 +101,8 @@ def _inline_var(code, name, value, check_store=0, co_code=None):
                     if C:
                         del co_code[i - 2:i + 2]
                         i -= 2
+                else:
+                    break
             else:
                 break
         elif (inst is BINARY_OP
@@ -159,6 +161,8 @@ def _inline_builtins(code, check_store=0, co_code=None,
                         builtins_dict[name] = co_consts[co_code[arg_idx]]
                         #del co_code[i - 2:i + 2]
                         #i -= 2
+                    else:
+                        del builtins_dict[name]
                 else:
                     del builtins_dict[name]
         elif (inst is BINARY_OP
@@ -216,6 +220,8 @@ def _inline_globals(code, glob, check_store=0, co_code=None):
                         glob[name] = co_consts[co_code[arg_idx]]
                         #del co_code[i - 2:i + 2]
                         #i -= 2
+                    else:
+                        del glob[name]
                 else:
                     del glob[name]
         elif (inst is BINARY_OP
@@ -311,6 +317,9 @@ if __name__ == '__main__':
         s += 7
         print(s)
         c += 2
-        return a + b + c
+        res = a + b + c
+        c += a
+        res2 = a + b + c
+        return res, res2
 
     dis(g)
