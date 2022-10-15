@@ -53,7 +53,7 @@ def _process(co_code, to=False):
     return co_code
 
 def _replace_const(code, const, value):
-    if const in (co_consts := code.co_consts):
+    if const in (co_consts := code.co_consts) and const != value:
         idx = co_consts.index(const)
         res = co_consts[:idx] + (value,) + co_consts[-~idx:]
         assert const not in res
