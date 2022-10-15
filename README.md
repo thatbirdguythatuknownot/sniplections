@@ -100,3 +100,27 @@ def uhm():
 
 print(uhm()) # 21450
 ```
+
+**inline.py**<br/>
+(Credits to <@!575681145929203724> (@denball#1376) for the original 3.10 code)<br/>
+Inline variables, globals, builtins, and replace constants. Works in 3.11 only. To be used like this:
+```py
+from dis import dis
+
+s = 5
+
+@inline_globals(check_store=2)
+@inline_var('c', 5, check_store=2, inline_args=False)
+def g(a, b):
+    global s
+    print(s)
+    s += 7
+    print(s)
+    c += 2
+    return a + b + c + s
+
+print(g(5, 6))
+# `print(s)` (first one): 5
+# `print(s)` (second one): 12
+# result: 30
+```
