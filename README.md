@@ -110,7 +110,7 @@ from dis import dis
 s = 5
 
 @inline_globals(check_store=2)
-@inline_var('c', 5, check_store=2, inline_args=False)
+@inline_var('c', 5, check_store=2, inline_arg=False)
 def g(a, b):
     global s
     print(s)
