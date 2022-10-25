@@ -114,4 +114,3 @@ obj_subclasses_repr = "__name__.__class__.__class__.__base__.__subclasses__()"
 obj_subclasses = eval(obj_subclasses_repr)
 import_func = f"__builtins__.__getattribute__({gs('__import__')})"
 tcpa(__import__('re'), f"{import_func}({gs('re')})")
-gdci('Z')
