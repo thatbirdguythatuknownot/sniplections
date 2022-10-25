@@ -3,7 +3,7 @@ from functools import cache, reduce
 
 type_classrepr_pair = [(int, "__name__.__len__().__class__"), (str, "__name__.__class__"),
                        (type, "__name__.__class__.__class__"),
-                       (complex, "({0}:=__name__.__len__().__class__().__invert__()).__truediv__({0}:={0}.__neg__()).__pow__({0}.__truediv__({0}.__invert__().__neg__())).__class__")]
+                       (complex, "({0}:=__name__.__ne__(__name__).__invert__()).__truediv__({0}:={0}.__neg__()).__pow__({0}.__truediv__({0}.__invert__().__neg__())).__class__")]
 
 def tcpa(o, rep): # type_classrepr_pair append
     type_classrepr_pair.append((o, rep))
@@ -65,6 +65,10 @@ class obfuscator:
     def on(self, x, name_=None, values={
             0: "__name__.__ne__(__name__)",
             1: "__name__.__eq__(__name__)"}): # obfuscate number
+        if x < 0:
+            res = on(inv := ~x)
+            values[x] = f"{values[inv]}.__invert__()"
+            return f"{res}.__invert__()"
         if x in values:
             return values[x]
         elif x not in {2, 3}:
