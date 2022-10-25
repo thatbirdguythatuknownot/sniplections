@@ -1,5 +1,5 @@
 import importlib
-from functools import reduce
+from functools import cache, reduce
 
 type_classrepr_pair = [(int, "__name__.__len__().__class__"), (str, "__name__.__class__"),
                        (type, "__name__.__class__.__class__"),
@@ -25,6 +25,25 @@ def gifi(it, b): # get index from iterable
         if b == x:
             return i
 
+def _gp(y, D={}): # generate primes
+    q = 2
+    while q < y:
+        if q not in D:
+            yield q
+            D[q * q] = [q]
+        else:
+            for p in D[q]:
+                D.setdefault(p + q, []).append(p)
+            del D[q]
+        q += 1
+
+@cache
+def spf(x): # smallest prime factor
+    factors = [i for i in _gp((x**.5 + 1).__trunc__()) if not x % i]
+    if factors:
+        return factors[len(factors) >> 1]
+    return x
+
 @lambda c:c()
 class obfuscator:
     def __init__(self, taken=None):
@@ -43,11 +62,31 @@ class obfuscator:
         self.taken.add(name)
         return name
     
-    def on(self, x): # obfuscate number
-        #if x in {2, 3}:
-        #    name = self.nn()
-        #    return reduce("{}.__add__({})".format, [])
-        return x
+    def on(self, x, name_=None, values={
+            0: "__name__.__ne__(__name__)",
+            1: "__name__.__eq__(__name__)"}): # obfuscate number
+        if x in values:
+            return values[x]
+        elif x not in {2, 3}:
+            # TODO: better stuff
+            p = spf(x)
+            add = 0
+            orig_x = x
+            while x > 3 and p == x:
+                x -= (t := x // 3)
+                p = spf(x)
+                add += t
+            name = name_ or self.nn()
+            res = f"({{}}:={self.on(p, name)}.__mul__({self.on(x // p, name)})" \
+                  f"{f'.__add__({on(add, name)})' if add else ''})"
+            x = orig_x # for setting to values[x] later
+        else:
+            name = name_ or self.nn()
+            res = f"""({{}}:={reduce("{}.__add__({})".format,
+                                     [f"({name}:=__name__.__getitem__({on(0)}))"]
+                                     +[name]*(x-1))}.__len__())"""
+        values[x] = resname = self.nn() if name_ else name
+        return res.format(resname)
     
     def gdci(self, c, name=None): # get __doc__ and character index
         if not name:
@@ -75,3 +114,4 @@ obj_subclasses_repr = "__name__.__class__.__class__.__base__.__subclasses__()"
 obj_subclasses = eval(obj_subclasses_repr)
 import_func = f"__builtins__.__getattribute__({gs('__import__')})"
 tcpa(__import__('re'), f"{import_func}({gs('re')})")
+gdci('Z')
