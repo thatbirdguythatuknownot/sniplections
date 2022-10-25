@@ -88,6 +88,7 @@ class obfuscator:
         values[x] = resname = self.nn() if name_ else name
         return res.format(resname)
     
+    @cache
     def gdci(self, c, name=None): # get __doc__ and character index
         if not name:
             name = self.nnu()
@@ -97,16 +98,17 @@ class obfuscator:
                     self.taken.add(name)
                 return rep, r
     
-    def gs(self, s): # get string
+    def gs(self, s, values={}): # get string
+        if s in values:
+            return values[s]
         name = self.nn()
         l = []
         for c in s:
             rep, idx = self.gdci(c, name)
             l.append(f"{rep}.__getitem__({self.on(idx)})")
         res = reduce("{}.__add__({})".format, l)
-        if ':=' not in res:
-            self.taken.remove(name)
-        return res
+        values[s] = name
+        return f"({name}:={res})"
 
 globals().update({x: getattr(obfuscator, x) for x in dir(obfuscator) if '_' not in x})
 
