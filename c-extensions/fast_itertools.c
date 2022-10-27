@@ -274,7 +274,7 @@ chunked_traverse(chunkedobject *o, visitproc visit, void *arg)
 static PyObject *
 chunked_next(chunkedobject *o)
 {
-    PyObject *iterable = o->iterable;
+    PyObject *iterable = o->iterable, **items;
     Py_ssize_t n = o->n;
     int done = o->done;
     Py_ssize_t i;
@@ -288,6 +288,7 @@ chunked_next(chunkedobject *o)
     if (unlikely(res == NULL)) {
         return NULL;
     }
+    items = _PyList_ITEMS(res);
     iternextfunc it = Py_TYPE(iterable)->tp_iternext;
     for (i = 0; i < n; i++) {
         PyObject *item = it(iterable);
@@ -312,7 +313,7 @@ chunked_next(chunkedobject *o)
             }
             goto error;
         }
-        PyList_SET_ITEM(res, i, item);
+        items[i] = item;
     }
     Py_SET_SIZE(res, i);
     return res;
