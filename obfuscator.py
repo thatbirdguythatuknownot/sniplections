@@ -1,12 +1,8 @@
-import importlib
+import importlib, re
 from functools import cache, reduce
+from math import log2, trunc
 
-type_classrepr_pair = [(int, "__name__.__len__().__class__"), (str, "__name__.__class__"),
-                       (type, "__name__.__class__.__class__"),
-                       (complex, "({0}:=__name__.__ne__(__name__).__invert__()).__truediv__({0}:={0}.__neg__()).__pow__({0}.__truediv__({0}.__invert__().__neg__())).__class__")]
-
-def tcpa(o, rep): # type_classrepr_pair append
-    type_classrepr_pair.append((o, rep))
+obj_subclasses_repr = "__name__.__class__.__class__.__base__.__subclasses__()"
 
 """
 def gbni(b): # get builtin name index
@@ -25,6 +21,7 @@ def gifi(it, b): # get index from iterable
         if b == x:
             return i
 
+"""
 def _gp(y, D={}): # generate primes
     q = 2
     while q < y:
@@ -38,18 +35,31 @@ def _gp(y, D={}): # generate primes
         q += 1
 
 @cache
-def spf(x): # smallest prime factor
-    factors = [i for i in _gp((x**.5 + 1).__trunc__()) if not x % i]
+def gpf(x): # greatest prime factor
+    factors = [i for i in _gp(trunc(x**.5 + 1)) if not x % i]
     if factors:
         return factors[len(factors) >> 1]
     return x
+"""
 
-@lambda c:c()
-class obfuscator:
+@cache
+def gpf(x): # greatest . factor
+    return next((i for i in range(trunc(x**.5 + 1), 1, -1) if not x % i), x)
+
+class Obfuscator:
     def __init__(self, taken=None):
         if taken is None:
             taken = {*()}
         self.taken = taken
+        self.object_repr_pair = {
+            int: "__name__.__len__().__class__", str: "__name__.__class__",
+            type: "__name__.__class__.__class__",
+            complex: ("({{0}}:=({0}:=__name__.__ne__(__name__).__invert__()).__truediv__({0}:={0}.__neg__()).__pow__({0}.__truediv__({0}.__invert__().__neg__())).__class__)",
+                      (), ()),
+            re: ("({0}:={1}({2}))", (__import__,), ("re",)),
+            __import__: ("({0}:=__builtins__.__getattribute__({1}))", (), ("__import__",)),
+        }
+        self._nonassigned = {complex, re, __import__}
     
     def nnu(self): # new name unmodified
         name = '_'
@@ -62,6 +72,16 @@ class obfuscator:
         self.taken.add(name)
         return name
     
+    def porpv(self, x, name=None): # process object repr pair value
+        v = self.object_repr_pair[x]
+        if type(v) is not tuple:
+            return v
+        if name is None:
+            name = self.nn()
+        self.object_repr_pair[x] = name
+        res = v[0].format(name, *map(self.porpv, v[1]), *map(self.gs, v[2]))
+        return res, name
+    
     def on(self, x, name_=None, values={
             0: "__name__.__ne__(__name__)",
             1: "__name__.__eq__(__name__)"}): # obfuscate number
@@ -73,15 +93,23 @@ class obfuscator:
             return values[x]
         elif x not in {2, 3}:
             # TODO: better stuff
-            p = spf(x)
+            p = gpf(x)
             add = 0
             orig_x = x
             while x > 3 and p == x:
                 x -= (t := x // 3)
-                p = spf(x)
+                p = gpf(x)
                 add += t
+            q = x // p
             name = name_ or self.nn()
-            res = f"({{}}:={self.on(p, name)}.__mul__({self.on(x // p, name)})" \
+            method = "mul"
+            if q > 4 and (qb := log2(q)).is_integer():
+                qb = trunc(qb)
+                if p > 4 and (pb := log2(p)).is_integer() and pb < qb:
+                    pb, qb = qb, trunc(pb)
+                q = qb
+                method = "lshift"
+            res = f"({{}}:={self.on(p, name)}.__{method}__({self.on(q, name)})" \
                   f"{f'.__add__({on(add, name)})' if add else ''})"
             x = orig_x # for setting to values[x] later
         else:
@@ -92,14 +120,17 @@ class obfuscator:
         values[x] = resname = self.nn() if name_ else name
         return res.format(resname)
     
-    @cache
-    def gdci(self, c, name=None): # get __doc__ and character index
-        if not name:
-            name = self.nnu()
-        for x, rep in map(lambda x: (x[0], f"{x[1]}.__doc__".format(name)), type_classrepr_pair):
+    def gdci(self, c, name_=None): # get __doc__ and character index
+        name = name_ or self.nnu()
+        for x, rep in map(lambda x: (x[0], f"{x[1]}.__doc__".format(name)),
+                          self.object_repr_pair.items()):
             if (r := x.__doc__.find(c)) >= 0:
                 if ':=' in rep and name not in self.taken:
                     self.taken.add(name)
+                if x in self._nonassigned:
+                    self._nonassigned.remove(x)
+                    assignable_name = self.nn() if name_ else name
+                    rep, _ = self.porpv(x, assignable_name)
                 return rep, r
     
     def gs(self, s, values={}): # get string
@@ -113,10 +144,26 @@ class obfuscator:
         res = reduce("{}.__add__({})".format, l)
         values[s] = name
         return f"({name}:={res})"
+    
+    def clear(self):
+        for f, new in [
+                (self.on, {
+                    0: "__name__.__ne__(__name__)",
+                    1: "__name__.__eq__(__name__)"
+                }),
+                (self.gs, {})]:
+            (dflt := f.__defaults__[-1]).clear()
+            dflt.update(new)
+        self.taken.clear()
+        self.object_repr_pair = {
+            int: "__name__.__len__().__class__", str: "__name__.__class__",
+            type: "__name__.__class__.__class__",
+            complex: ("({{0}}:=({0}:=__name__.__ne__(__name__).__invert__()).__truediv__({0}:={0}.__neg__()).__pow__({0}.__truediv__({0}.__invert__().__neg__())).__class__)",
+                      (), ()),
+            re: ("({0}:={1}({2}))", (__import__,), ("re",)),
+            __import__: ("({0}:=__builtins__.__getattribute__({1}))", (), ("__import__",)),
+        }
+        self._nonassigned = {complex, re, __import__}
 
-globals().update({x: getattr(obfuscator, x) for x in dir(obfuscator) if '_' not in x})
-
-obj_subclasses_repr = "__name__.__class__.__class__.__base__.__subclasses__()"
-obj_subclasses = eval(obj_subclasses_repr)
-import_func = f"__builtins__.__getattribute__({gs('__import__')})"
-tcpa(__import__('re'), f"{import_func}({gs('re')})")
+obfuscator = Obfuscator()
+globals().update({x: getattr(obfuscator, x) for x in dir(obfuscator) if not x.startswith('_')})
