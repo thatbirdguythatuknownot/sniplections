@@ -54,7 +54,7 @@ class Obfuscator:
         self.object_repr_pair = {
             int: "__name__.__len__().__class__", str: "__name__.__class__",
             type: "__name__.__class__.__class__",
-            complex: ("({{0}}:=({0}:=__name__.__ne__(__name__).__invert__()).__truediv__({0}:={0}.__neg__()).__pow__({0}.__truediv__({0}.__invert__().__neg__())).__class__)",
+            complex: ("({0}:=({{0}}:=__name__.__ne__(__name__).__invert__()).__truediv__({{0}}:={{0}}.__neg__()).__pow__({{0}}.__truediv__({{0}}.__invert__().__neg__())).__class__)",
                       (), ()),
             re: ("({0}:={1}({2}))", (__import__,), ("re",)),
             __import__: ("({0}:=__builtins__.__getattribute__({1}))", (), ("__import__",)),
@@ -122,15 +122,15 @@ class Obfuscator:
     
     def gdci(self, c, name_=None): # get __doc__ and character index
         name = name_ or self.nnu()
-        for x, rep in map(lambda x: (x[0], f"{x[1]}.__doc__".format(name)),
-                          self.object_repr_pair.items()):
+        for x, rep in self.object_repr_pair.items():
             if (r := x.__doc__.find(c)) >= 0:
-                if ':=' in rep and name not in self.taken:
-                    self.taken.add(name)
                 if x in self._nonassigned:
                     self._nonassigned.remove(x)
                     assignable_name = self.nn() if name_ else name
                     rep, _ = self.porpv(x, assignable_name)
+                rep = f"{rep}.__doc__".format(name)
+                if ':=' in rep and name not in self.taken:
+                    self.taken.add(name)
                 return rep, r
     
     def gs(self, s, values={}): # get string
@@ -158,7 +158,7 @@ class Obfuscator:
         self.object_repr_pair = {
             int: "__name__.__len__().__class__", str: "__name__.__class__",
             type: "__name__.__class__.__class__",
-            complex: ("({{0}}:=({0}:=__name__.__ne__(__name__).__invert__()).__truediv__({0}:={0}.__neg__()).__pow__({0}.__truediv__({0}.__invert__().__neg__())).__class__)",
+            complex: ("({0}:=({{0}}:=__name__.__ne__(__name__).__invert__()).__truediv__({{0}}:={{0}}.__neg__()).__pow__({{0}}.__truediv__({{0}}.__invert__().__neg__())).__class__)",
                       (), ()),
             re: ("({0}:={1}({2}))", (__import__,), ("re",)),
             __import__: ("({0}:=__builtins__.__getattribute__({1}))", (), ("__import__",)),
