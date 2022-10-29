@@ -127,4 +127,16 @@ print(g(5, 6))
 Note that there should not be `s += 7` or `c += 2` in the bytecode.
 
 **obfuscator.py**<br/>
-WIP Python code obfuscator.
+WIP Python code obfuscator. To be used like this:
+```py
+from obfuscator import Obfuscator
+
+obfuscate = Obfuscator() # obfuscator = Obfuscator(taken=False)
+                         #: use above for "no walrus" mode
+output = obfuscate.gs('abc')
+print(output) #: depends on Python version
+```
+Output:
+```py
+(_:=__name__.__len__().__class__.__doc__.__getitem__((______:=(___:=(__:=(_:=__name__.__getitem__(__name__.__ne__(__name__))).__add__(_).__len__()).__mul__(__)).__mul__((_____:=__.__mul__(__).__add__((____:=(_:=__name__.__getitem__(__name__.__ne__(__name__))).__add__(_).__add__(_).__len__())))))).__add__(__name__.__len__().__class__.__doc__.__getitem__((________:=____.__mul__((_______:=____.__mul__(____)))))).__add__(__name__.__len__().__class__.__doc__.__getitem__((______________:=__.__mul__((_____________:=____.__mul__((_________:=___.__mul__(___).__add__(_____))).__add__((____________:=__.__mul__((___________:=___.__mul__(____).__add__((__________:=__.__mul__(__).__invert__().__neg__()))))))))))))
+```
