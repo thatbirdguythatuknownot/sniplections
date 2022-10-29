@@ -6,7 +6,7 @@ class Private:
         if "__annotations__" not in ns:
             return type.__new__(type, name, bases, ns)
         attributes = {k for k, v in ns["__annotations__"].items() if v is _meta}
-        all_code = {f.__code__ for f in ns.values() if isinstance(f, FunctionType)}
+        all_code = set()
         for f in ns.values():
             if isinstance(f, FunctionType):
                 all_code.add(f)
