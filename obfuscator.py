@@ -45,6 +45,23 @@ def gpf(x): # greatest . factor
     return next((i for i in range(trunc(x**.5 + 1), 1, -1) if not x % i), x)
 
 class Obfuscator:
+    """Obfuscator(taken=None)
+    Obfuscate Python code. Outputs code with underscore-only names
+    and dunder-only attributes.
+
+        taken = None
+            Predefined set of names. Will be cleared if called by `.c()`.
+            By default None, which is then replaced with an empty set. Passing
+            True will also create an empty set.
+            If `taken = False`, "no walrus" mode is activated.
+
+    Function documentation:
+        .<abbreviated name>(<args>): <expanded name> [-- <flags>]
+            <description>
+
+    Flags:
+        W -> requires walrus operator
+    """
     def __init__(self, taken=None):
         self.no_walrus = taken is False
         if self.no_walrus:
@@ -53,12 +70,15 @@ class Obfuscator:
                 type: "__name__.__class__.__class__",
                 object: "__name__.__class__.__class__.__base__)",
                 complex: "__name__.__ne__(__name__).__invert__().__truediv__(__name__.__eq__(__name__)).__pow__(__name__.__eq__(__name__).__truediv__(__name__.__eq__(__name__).__invert__().__neg__())).__class__",
+                open: ("__builtins__.__dict__.__getitem__({1})", (), ("open",)),
+                oct: ("__builtins__.__dict__.__getitem__(__builtins__.__dir__().__getitem__({1}))",
+                      ((__builtins__.__dir__, "oct"),), ()),
                 re: ("{1}({2})", (__import__,), ("re",)),
                 __import__: ("__builtins__.__getattribute__({1})", (), ("__import__",)),
             }
         else:
             if taken is None or taken is True:
-                taken = {*()}
+                taken = set()
             self.taken = taken
             self.object_repr_pair = {
                 int: "__name__.__len__().__class__", str: "__name__.__class__",
@@ -66,42 +86,61 @@ class Obfuscator:
                 object: ("({0}:=__name__.__class__.__class__.__base__)", (), ()),
                 complex: ("({0}:=({{0}}:=__name__.__ne__(__name__).__invert__()).__truediv__({{0}}:={{0}}.__neg__()).__pow__({{0}}.__truediv__({{0}}.__invert__().__neg__())).__class__)",
                           (), ()),
+                open: ("({0}:=__builtins__.__dict__.__getitem__({1}))", (), ("open",)),
+                oct: ("({0}:=__builtins__.__dict__.__getitem__(__builtins__.__dir__().__getitem__({1})))",
+                      ((__builtins__.__dir__, "oct"),), ()),
                 re: ("({0}:={1}({2}))", (__import__,), ("re",)),
                 __import__: ("({0}:=__builtins__.__getattribute__({1}))", (), ("__import__",)),
             }
-            self._nonassigned = {complex, re, __import__}
+            self._nonassigned = {complex, open, oct, re, __import__}
     
-    def nnu(self): # new name unmodified
+    def nnu(self):
+        """.nnu(): new name unmodified -- W
+        Add a new name without adding it to `.taken`."""
         name = '_'
         while name in self.taken:
             name += '_'
         return name
     
-    def nn(self): # new name
+    def nn(self):
+        """.nn(): new name -- W
+        Add a new name, also adding it to `.taken`."""
         name = self.nnu()
         self.taken.add(name)
         return name
     
-    def porpv(self, x, name=None): # process object repr pair value
+    def porpv(self, x, name=None):
+        """.porpv(x, name=None): process object repr pair value
+        Get a value from the internal object-to-representation mapping using
+        `x` as the key and process it so the proper string value is returned.
+        Resulting string is assigned to `name` and `name` is assigned to
+        `.object_repr_pair[x]`."""
         v = self.object_repr_pair[x]
         if type(v) is not tuple:
             return v
         if self.no_walrus:
             self.object_repr_pair[x] = res = v[0].format(
                 None,
-                *map(lambda x: self.porpv(x)[0], v[1]),
+                *map(lambda x: self.on(gifi(x[0](), x[1]), name) if isinstance(x, tuple) else self.porpv(x)[0], v[1]), 
                 *map(self.gs, v[2])
             )
             return res, None
         if name is None:
             name = self.nn()
         self.object_repr_pair[x] = name
-        res = v[0].format(name, *map(lambda x: self.porpv(x)[0], v[1]), *map(self.gs, v[2]))
+        res = v[0].format(
+            name,
+            *map(lambda x: self.on(gifi(x[0](), x[1]), name) if isinstance(x, tuple) else self.porpv(x)[0], v[1]), 
+            *map(self.gs, v[2])
+        )
         return res, name
     
     def on(self, x, name_=None, values={
             0: "__name__.__ne__(__name__)",
-            1: "__name__.__eq__(__name__)"}): # obfuscate number
+            1: "__name__.__eq__(__name__)"}):
+        """.on(x, name_=None): obfuscate number
+        Obfuscate a number. `name_` is the temporary name used for temporary
+        value assignments."""
         if x < 0:
             res = on(inv := ~x)
             values[x] = f"{values[inv]}.__invert__()"
@@ -144,7 +183,10 @@ class Obfuscator:
         values[x] = resname = self.nn() if name_ else name
         return f"({resname}:={res})"
     
-    def gdci(self, c, name_=None): # get __doc__ and character index
+    def gdci(self, c, name_=None):
+        """.gdci(c, name_=None): get __doc__ and character index
+        Returns (obfuscated representation of `c`, index in
+        `<obfuscated>`)."""
         if self.no_walrus:
             for x, rep in self.object_repr_pair.items():
                 if (r := x.__doc__.find(c)) >= 0:
@@ -161,7 +203,9 @@ class Obfuscator:
                     self.taken.add(name)
                 return rep, r
     
-    def gs(self, s, values={}): # get string
+    def gs(self, s, values={}):
+        """.gs(s): get string
+        Gets the obfuscated representation of string `s`."""
         if s in values:
             return values[s]
         if self.no_walrus:
@@ -181,7 +225,9 @@ class Obfuscator:
         values[s] = name
         return f"({name}:={res})"
     
-    def clear(self):
+    def c(self):
+        """.c(): clear
+        Clears/resets obfuscator caches."""
         for f, new in [
                 (self.on, {
                     0: "__name__.__ne__(__name__)",
@@ -196,6 +242,9 @@ class Obfuscator:
                 type: "__name__.__class__.__class__",
                 object: "__name__.__class__.__class__.__base__)",
                 complex: "__name__.__ne__(__name__).__invert__().__truediv__(__name__.__eq__(__name__)).__pow__(__name__.__eq__(__name__).__truediv__(__name__.__eq__(__name__).__invert__().__neg__())).__class__",
+                open: ("__builtins__.__dict__.__getitem__({1})", (), ("open",)),
+                oct: ("__builtins__.__dict__.__getitem__(__builtins__.__dir__().__getitem__({1}))",
+                      ((__builtins__.__dir__, "oct"),), ()),
                 re: ("{1}({2})", (__import__,), ("re",)),
                 __import__: ("__builtins__.__getattribute__({1})", (), ("__import__",)),
             }
@@ -207,7 +256,10 @@ class Obfuscator:
                 object: ("({0}:=__name__.__class__.__class__.__base__)", (), ()),
                 complex: ("({0}:=({{0}}:=__name__.__ne__(__name__).__invert__()).__truediv__({{0}}:={{0}}.__neg__()).__pow__({{0}}.__truediv__({{0}}.__invert__().__neg__())).__class__)",
                           (), ()),
+                open: ("({0}:=__builtins__.__dict__.__getitem__({1}))", (), ("open",)),
+                oct: ("({0}:=__builtins__.__dict__.__getitem__(__builtins__.__dir__().__getitem__({1})))",
+                      ((__builtins__.__dir__, "oct"),), ()),
                 re: ("({0}:={1}({2}))", (__import__,), ("re",)),
                 __import__: ("({0}:=__builtins__.__getattribute__({1}))", (), ("__import__",)),
             }
-            self._nonassigned = {complex, re, __import__}
+            self._nonassigned = {complex, open, oct, re, __import__}
