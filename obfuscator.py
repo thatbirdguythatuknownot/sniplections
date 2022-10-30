@@ -1,4 +1,6 @@
 import importlib, re
+from ast import *
+from ast import _Precedence, _Unparser
 from functools import cache, reduce
 from math import log2, trunc
 
@@ -63,6 +65,11 @@ class Obfuscator:
         W -> requires walrus operator
     """
     def __init__(self, taken=None):
+        self.gs_values = {}
+        self.on_values = {
+            0: "__name__.__ne__(__name__)",
+            1: "__name__.__eq__(__name__)"
+        }
         self.no_walrus = taken is False
         if self.no_walrus:
             self.object_repr_pair = {
@@ -135,14 +142,13 @@ class Obfuscator:
         )
         return res, name
     
-    def on(self, x, name_=None, values={
-            0: "__name__.__ne__(__name__)",
-            1: "__name__.__eq__(__name__)"}):
+    def on(self, x, name_=None):
         """.on(x, name_=None): obfuscate number
         Obfuscate a number. `name_` is the temporary name used for temporary
         value assignments."""
+        values = self.on_values
         if x < 0:
-            res = on(inv := ~x)
+            res = self.on(inv := ~x)
             values[x] = f"{values[inv]}.__invert__()"
             return f"{res}.__invert__()"
         if x in values:
@@ -170,13 +176,13 @@ class Obfuscator:
                 method = "lshift"
             res = f"{self.on(p, name)}.__{method}__({self.on(q, name)})" \
                   f"""{'.__invert__().__neg__()' if add == 1 else
-                     f'.__add__({on(add, name)})' if add else ''}"""
+                     f'.__add__({self.on(add, name)})' if add else ''}"""
             x = orig_x # for setting to values[x] later
         else:
             res = f"""{reduce("{}.__add__({})".format,
-                              [f"__name__.__getitem__({on(0)})"]*x
+                              [f"__name__.__getitem__({self.on(0)})"]*x
                               if self.no_walrus else
-                              [f"({name}:=__name__.__getitem__({on(0)}))"]
+                              [f"({name}:=__name__.__getitem__({self.on(0)}))"]
                               +[name]*(x-1))}.__len__()"""
         if self.no_walrus:
             return res
@@ -203,9 +209,10 @@ class Obfuscator:
                     self.taken.add(name)
                 return rep, r
     
-    def gs(self, s, values={}):
+    def gs(self, s):
         """.gs(s): get string
         Gets the obfuscated representation of string `s`."""
+        values = self.gs_values
         if s in values:
             return values[s]
         if self.no_walrus:
@@ -228,14 +235,13 @@ class Obfuscator:
     def c(self):
         """.c(): clear
         Clears/resets obfuscator caches."""
-        for f, new in [
-                (self.on, {
+        for name, new in [
+                ("on", {
                     0: "__name__.__ne__(__name__)",
                     1: "__name__.__eq__(__name__)"
                 }),
-                (self.gs, {})]:
-            (dflt := f.__defaults__[-1]).clear()
-            dflt.update(new)
+                ("gs", {})]:
+            setattr(self, f"{name}_values", new)
         if self.no_walrus:
             self.object_repr_pair = {
                 int: "__name__.__len__().__class__", str: "__name__.__class__",
@@ -263,3 +269,52 @@ class Obfuscator:
                 __import__: ("({0}:=__builtins__.__getattribute__({1}))", (), ("__import__",)),
             }
             self._nonassigned = {complex, open, oct, re, __import__}
+
+builtins_dict = __builtins__.__dict__
+
+class UnparseObfuscate(_Unparser, Obfuscator):
+    def __init__(self, taken=None):
+        self._source = []
+        self._precedences = {}
+        self.name_to_taken = {}
+        self.overridden_builtins = set()
+        Obfuscator.__init__(self, taken)
+    
+    def get_name(self, id):
+        if not (name := self.name_to_taken.get(id)):
+            if id in builtins_dict and id not in self.overridden_builtins:
+                self.overridden_builtins.add(id)
+            name = self.nn()
+            self.name_to_taken[id] = name
+        return name
+    
+    def visit_Module(self, node):
+        self.traverse(node.body)
+    
+    def visit_Expr(self, node):
+        self.set_precedence(_Precedence.YIELD, node.value)
+        self.traverse(node.value)
+    
+    def visit_NamedExpr(self, node):
+        with self.require_parens(_Precedence.NAMED_EXPR, node):
+            self.set_precedence(_Precedence.ATOM, (t := node.target), node.value)
+            if isinstance(t, Name):
+                t.id = self.get_name(t.id)
+            self.traverse(node.target)
+            self.write(":=")
+            self.traverse(node.value)
+    
+    def visit_Import(self, node):
+        val, name = self.porpv(__import__)
+        it = iter(nn := node.names)
+        if len(nn) == 1:
+            name = self.get_name((_name := next(it)).asname)
+            with self.delimit("(", ")"):
+                self.write(f"{name}:={val}({self.gs(_name.name)})")
+    
+    def visit_ImportFrom(self, node):
+        raise NotImplementedError("from ... import ...")
+    
+    def visit_Assign(self, node):
+        for target in node.targets:
+            ...
