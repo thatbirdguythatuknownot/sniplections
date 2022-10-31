@@ -73,24 +73,35 @@ class Obfuscator:
         self.no_walrus = taken is False
         if self.no_walrus:
             self.object_repr_pair = {
-                int: "__name__.__len__().__class__", str: "__name__.__class__",
+                int: "__name__.__len__().__class__",
+                str: "__name__.__class__",
                 type: "__name__.__class__.__class__",
-                object: "__name__.__class__.__class__.__base__)",
+                object: "__name__.__class__.__class__.__base__",
+                dict: "__builtins__.__dict__.__class__",
                 complex: "__name__.__ne__(__name__).__invert__().__truediv__(__name__.__eq__(__name__)).__pow__(__name__.__eq__(__name__).__truediv__(__name__.__eq__(__name__).__invert__().__neg__())).__class__",
                 open: ("__builtins__.__dict__.__getitem__({1})", (), ("open",)),
                 oct: ("__builtins__.__dict__.__getitem__(__builtins__.__dir__().__getitem__({1}))",
                       ((__builtins__.__dir__, "oct"),), ()),
                 re: ("{1}({2})", (__import__,), ("re",)),
                 __import__: ("__builtins__.__getattribute__({1})", (), ("__import__",)),
+                setattr: ("__builtins__.__dict__.__getitem__(__builtins__.__dir__().__getitem__({1}))",
+                          ((__builtins__.__dir__, "setattr"),), ()),
+                slice: ("__builtins__.__getattribute__({1})", (), ("slice",)),
+                dict.fromkeys: ("{1}.__dict__.__getitem__({2})", (dict,), ("fromkeys",)),
+                True: "__name__.__eq__(__name__)",
+                False: "__name__.__ne__(__name__)",
+                None: ("{1}({2}).__getitem__({3})", (dict.fromkeys,), ('_', '_')),
             }
         else:
             if taken is None or taken is True:
                 taken = set()
             self.taken = taken
             self.object_repr_pair = {
-                int: "__name__.__len__().__class__", str: "__name__.__class__",
+                int: "__name__.__len__().__class__",
+                str: "__name__.__class__",
                 type: "__name__.__class__.__class__",
                 object: ("({0}:=__name__.__class__.__class__.__base__)", (), ()),
+                dict: "__builtins__.__dict__.__class__",
                 complex: ("({0}:=({{0}}:=__name__.__ne__(__name__).__invert__()).__truediv__({{0}}:={{0}}.__neg__()).__pow__({{0}}.__truediv__({{0}}.__invert__().__neg__())).__class__)",
                           (), ()),
                 open: ("({0}:=__builtins__.__dict__.__getitem__({1}))", (), ("open",)),
@@ -98,6 +109,13 @@ class Obfuscator:
                       ((__builtins__.__dir__, "oct"),), ()),
                 re: ("({0}:={1}({2}))", (__import__,), ("re",)),
                 __import__: ("({0}:=__builtins__.__getattribute__({1}))", (), ("__import__",)),
+                setattr: ("({0}:=__builtins__.__dict__.__getitem__(__builtins__.__dir__().__getitem__({1})))",
+                          ((__builtins__.__dir__, "setattr"),), ()),
+                slice: ("({0}:=__builtins__.__getattribute__({1}))", (), ("slice",)),
+                dict.fromkeys: ("({0}:={1}.__dict__.__getitem__({2}))", (dict,), ("fromkeys",)),
+                True: "__name__.__eq__(__name__)",
+                False: "__name__.__ne__(__name__)",
+                None: ("({0}:={1}({2}).__getitem__({3}))", (dict.fromkeys,), ('_', '_')),
             }
             self._nonassigned = {complex, open, oct, re, __import__}
     
@@ -244,22 +262,33 @@ class Obfuscator:
             setattr(self, f"{name}_values", new)
         if self.no_walrus:
             self.object_repr_pair = {
-                int: "__name__.__len__().__class__", str: "__name__.__class__",
+                int: "__name__.__len__().__class__",
+                str: "__name__.__class__",
                 type: "__name__.__class__.__class__",
-                object: "__name__.__class__.__class__.__base__)",
+                object: "__name__.__class__.__class__.__base__",
+                dict: "__builtins__.__dict__.__class__",
                 complex: "__name__.__ne__(__name__).__invert__().__truediv__(__name__.__eq__(__name__)).__pow__(__name__.__eq__(__name__).__truediv__(__name__.__eq__(__name__).__invert__().__neg__())).__class__",
                 open: ("__builtins__.__dict__.__getitem__({1})", (), ("open",)),
                 oct: ("__builtins__.__dict__.__getitem__(__builtins__.__dir__().__getitem__({1}))",
                       ((__builtins__.__dir__, "oct"),), ()),
                 re: ("{1}({2})", (__import__,), ("re",)),
                 __import__: ("__builtins__.__getattribute__({1})", (), ("__import__",)),
+                setattr: ("__builtins__.__dict__.__getitem__(__builtins__.__dir__().__getitem__({1}))",
+                          ((__builtins__.__dir__, "setattr"),), ()),
+                slice: ("__builtins__.__getattribute__({1})", (), ("slice",)),
+                dict.fromkeys: ("{1}.__dict__.__getitem__({2})", (dict,), ("fromkeys",)),
+                True: "__name__.__eq__(__name__)",
+                False: "__name__.__ne__(__name__)",
+                None: ("{1}({2}).__getitem__({3})", (dict.fromkeys,), ('_', '_')),
             }
         else:
             self.taken.clear()
             self.object_repr_pair = {
-                int: "__name__.__len__().__class__", str: "__name__.__class__",
+                int: "__name__.__len__().__class__",
+                str: "__name__.__class__",
                 type: "__name__.__class__.__class__",
                 object: ("({0}:=__name__.__class__.__class__.__base__)", (), ()),
+                dict: "__builtins__.__dict__.__class__",
                 complex: ("({0}:=({{0}}:=__name__.__ne__(__name__).__invert__()).__truediv__({{0}}:={{0}}.__neg__()).__pow__({{0}}.__truediv__({{0}}.__invert__().__neg__())).__class__)",
                           (), ()),
                 open: ("({0}:=__builtins__.__dict__.__getitem__({1}))", (), ("open",)),
@@ -267,6 +296,13 @@ class Obfuscator:
                       ((__builtins__.__dir__, "oct"),), ()),
                 re: ("({0}:={1}({2}))", (__import__,), ("re",)),
                 __import__: ("({0}:=__builtins__.__getattribute__({1}))", (), ("__import__",)),
+                setattr: ("({0}:=__builtins__.__dict__.__getitem__(__builtins__.__dir__().__getitem__({1})))",
+                          ((__builtins__.__dir__, "setattr"),), ()),
+                slice: ("({0}:=__builtins__.__getattribute__({1}))", (), ("slice",)),
+                dict.fromkeys: ("({0}:={1}.__dict__.__getitem__({2}))", (dict,), ("fromkeys",)),
+                True: "__name__.__eq__(__name__)",
+                False: "__name__.__ne__(__name__)"
+                None: ("({0}:={1}({2}).__getitem__({3}))", (dict.fromkeys,), ('_', '_')),
             }
             self._nonassigned = {complex, open, oct, re, __import__}
 
@@ -279,6 +315,18 @@ class UnparseObfuscate(_Unparser, Obfuscator):
         self.name_to_taken = {}
         self.overridden_builtins = set()
         Obfuscator.__init__(self, taken)
+    
+    def not_implemented(self, node):
+        print(f"""<string>:Line {node.lineno}{
+                f' -> Line {node.end_lineno}'
+                if node.lineno != node.end_lineno else
+                ''
+              }:Column {node.col_offset}{
+                f' -> Column {node.end_col_offset}'
+                if node.col_offset != node.end_col_offset else
+                ''
+              }: .visit_{(name := type(node).__name__)}() is not implemented""")
+        return getattr(super(), f"visit_{name}", self.generic_visit)(node)
     
     def get_name(self, id):
         if not (name := self.name_to_taken.get(id)):
@@ -307,14 +355,49 @@ class UnparseObfuscate(_Unparser, Obfuscator):
     def visit_Import(self, node):
         val, name = self.porpv(__import__)
         it = iter(nn := node.names)
-        if len(nn) == 1:
-            name = self.get_name((_name := next(it)).asname)
-            with self.delimit("(", ")"):
-                self.write(f"{name}:={val}({self.gs(_name.name)})")
+        self.write(f"({self.get_name((_name := next(it)).asname)}:={val}({self.gs(_name.name)}))")
+        self.interleave(lambda: self.write(','),
+                        lambda _name: f"({self.get_name(_name.asname)}:={name}({self.gs(_name.name)}))",
+                        it)
     
-    def visit_ImportFrom(self, node):
-        raise NotImplementedError("from ... import ...")
+    visit_ImportFrom = not_implemented
+    
+    def _chain_assign(self, item):
+        *targs, value = item
+        last_idx = len(targs) - 1
+        with self.buffered() as buffer:
+            self.traverse(value)
+        value = ''.join(buffer)
+        for i, x in enumerate(targs):
+            if isinstance(x, Name):
+                value = f"({self.get_name(x.id)}:={value})"
+                continue
+            elif i != last_idx:
+                return
+            self.traverse(x.value)
+            ic = i != 0
+            if isinstance(x, Attribute):
+                self.write(f".__setattr__({self.gs(x.attr)},{value[ic:-ic]})")
+            elif isinstance(x, Subscript):
+                with self.delimit(f".__setitem__({self.porpv(slice)}(", f"),{value[ic:-ic]})"):
+                    if isinstance(sl := x.slice, Slice):
+                        self.traverse(lambda: self.write(','), self.traverse, (sl.start, sl.stop, sl.step))
+                    else:
+                        self.traverse(sl)
+            break
+        else:
+            self.write(value)
     
     def visit_Assign(self, node):
-        for target in node.targets:
-            ...
+        if isinstance(node.value, Tuple):
+            try:
+                it = zip(*map(lambda x: x.elts, node.targets), node.value.elts, strict=True)
+            except AttributeError:
+                return self.not_implemented(node)
+            with self.buffered() as buffer:
+                self.interleave(lambda: self.write(','), self._chain_assign, it)
+            if not buffer or buffer[-1] is None:
+                return self.not_implemented(node)
+            self._source.extend(buffer)
+
+UnparseObfuscate().visit(parse("a, b = None, True"))
