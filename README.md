@@ -149,3 +149,6 @@ class Foo(metaclass=Private):
     attr2: Private
     ...
 ```
+
+**stack.py**<br/>
+WIP Python object stack manipulator.
