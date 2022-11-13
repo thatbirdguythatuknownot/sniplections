@@ -151,4 +151,13 @@ class Foo(metaclass=Private):
 ```
 
 **stack.py**<br/>
-WIP Python object stack manipulator.
+Python object stack manipulator (3.11). Works like this:
+```py
+from stack import get_stack
+
+def f():
+    get_stack().push(5)
+    return (7, get_stack().pop())
+
+print(f()) # (5, 7)
+```
