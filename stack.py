@@ -44,10 +44,9 @@ def get_stack(depth=0):
     nlocplus = c_int.from_address(id(frame.f_code) + object.__basicsize__ + tuple.__itemsize__*4 + sizeof(c_int)*6 + sizeof(c_short)*2).value
     default_length = c_int.from_address(stacktop_addr := addr + tuple.__itemsize__ * 8).value + 1
     array_base = stacktop_addr + sizeof(c_int) * 2 + nlocplus * tuple.__itemsize__
-    @lambda c:c(frame, code_addr, stacktop_addr, array_base)
+    @lambda c:c(code_addr, stacktop_addr, array_base)
     class stack:
-        def __init__(self, frame, code_addr, stacktop_addr, array_base):
-            self.frame = frame
+        def __init__(self, code_addr, stacktop_addr, array_base):
             self.code_addr = code_addr
             self.stacktop_addr = stacktop_addr
             self.array_base = array_base
