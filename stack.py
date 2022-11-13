@@ -151,27 +151,3 @@ def get_stack(depth=0):
             stacktop_cell.value -= 1
             return old
     return stack
-
-def f():
-    return (7, get_stack().push(5))
-
-f() # (7, 5)
-
-def f():
-    p1, p2 = get_stack().push, get_stack().pop
-    p1(5)
-    return (p2(),)
-
-f() # (5,)
-
-def f():
-    get_stack().push(5)
-
-f.__code__ = f.__code__.replace(co_code=f.__code__.co_code[:-4]+f.__code__.co_code[-2:])
-f() # 5
-
-def f():
-    get_stack().push(5)
-    return (get_stack().pop(),)
-
-f() # (5,)
