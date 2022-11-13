@@ -44,9 +44,10 @@ def get_stack(depth=0):
     nlocplus = c_int.from_address(id(frame.f_code) + object.__basicsize__ + tuple.__itemsize__*4 + sizeof(c_int)*6 + sizeof(c_short)*2).value
     default_length = c_int.from_address(stacktop_addr := addr + tuple.__itemsize__ * 8).value + 1
     array_base = stacktop_addr + sizeof(c_int) * 2 + nlocplus * tuple.__itemsize__
-    @lambda c:c(code_addr, stacktop_addr, array_base)
+    @lambda c:c(frame, code_addr, stacktop_addr, array_base)
     class stack:
-        def __init__(self, code_addr, stacktop_addr, array_base):
+        def __init__(self, frame, code_addr, stacktop_addr, array_base):
+            self.frame = frame
             self.code_addr = code_addr
             self.stacktop_addr = stacktop_addr
             self.array_base = array_base
@@ -115,24 +116,17 @@ def get_stack(depth=0):
                 return 2, place
             return 0, None
         def push(self, value):
-            #for idx in range(len(self)):
-            #    i, place = self._check(idx)
-            #    if i != 1:
-            #        break
-            #else:
-            #    raise ValueError("stack is full")
-            stacktop = (stacktop_cell := c_int.from_address(self.stacktop_addr)).value + 1
-            stacktop_cell.value += 1
+            stacktop = (stacktop_cell := c_int.from_address(self.stacktop_addr)).value
             while stacktop >= 0:
-                if (tup := self._check(stacktop))[0] == -1:
+                if (tup := self._check(stacktop))[0] == 1 and tup[1].value is self.__class__.push:
                     break
                 stacktop -= 1
-            else:
-                c_int.from_address(self.code_addr + 3 * tuple.__itemsize__ + sizeof(c_int) * 4 + sizeof(c_short)).value += 1
-                tup = (-1, self.array_base + tuple.__itemsize__ * stacktop_cell.value)
-            print(c_ssize_t.from_address(self.array_base).value, id(7))
-            Py_INCREF(value);
-            c_void_p.from_address(tup[1]).value = id(value)
+            if stacktop < 0:
+                raise ValueError("stack is full")
+            Py_INCREF(value)
+            tup[1].value = value
+            stacktop_cell.value += 1
+            return value
         def set_top(self, value):
             stacktop = (stacktop_cell := c_int.from_address(self.stacktop_addr)).value
             while stacktop >= 0:
@@ -145,15 +139,12 @@ def get_stack(depth=0):
             Py_INCREF(value)
             py_object.from_address(self.array_base + tuple.__itemsize__ * stacktop).value = value
         def pop(self):
-            #for idx in range(len(self)):
-            #    i, cell = self._check(idx)
-            #    if i != 1:
-            #        idx -= 1
-            #        break
-            #    prevcell = cell
-            #if idx < 0:
-            #    raise ValueError("stack is empty")
             stacktop = (stacktop_cell := c_int.from_address(self.stacktop_addr)).value
+            while stacktop >= 0:
+                if stacktop and (tup := self._check(stacktop))[0] == 1 and tup[1].value is self.__class__.pop:
+                    stacktop -= 1
+                    break
+                stacktop -= 1
             if stacktop < 0:
                 raise ValueError("stack is empty")
             cell = py_object.from_address(self.array_base + stacktop * tuple.__itemsize__)
@@ -165,34 +156,23 @@ def get_stack(depth=0):
 def f():
     return (7, get_stack().push(5))
 
-f()
+f() # (7, 5)
 
 def f():
     p1, p2 = get_stack().push, get_stack().pop
     p1(5)
     return (p2(),)
 
-f()
+f() # (5,)
 
-fail = """
 def f():
     get_stack().push(5)
 
 f.__code__ = f.__code__.replace(co_code=f.__code__.co_code[:-4]+f.__code__.co_code[-2:])
-from dis import dis
-dis(f)
-f()
+f() # 5
 
 def f():
     get_stack().push(5)
     return (get_stack().pop(),)
 
-f()
-"""
-
-exec(fail)
-
-def f():
-    return (7, get_stack().set_top(5))
-
-f()
+f() # (5,)
