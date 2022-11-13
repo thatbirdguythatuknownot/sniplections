@@ -2,11 +2,13 @@ import builtins
 from _ctypes import Py_INCREF
 from ctypes import *
 from gc import get_objects
+from opcode import EXTENDED_ARG, opmap
 from sys import _getframe
 
 py_object_p = POINTER(py_object)
 
 list_builtins = [*builtins.__dict__.values()]
+needs_return = {opmap['POP_TOP'], opmap['PRINT_EXPR'], opmap['RETURN_VALUE']}
 
 @lambda c: c()
 class NULL:
@@ -41,13 +43,15 @@ def get_stack(depth=0):
     frame = _getframe(depth + 1)
     addr = c_void_p.from_address(id(frame) + object.__basicsize__ + tuple.__itemsize__).value
     code_addr = addr + tuple.__itemsize__ * 4
+    stacksize_addr = c_void_p.from_address(code_addr).value + object.__basicsize__ + 4 * tuple.__itemsize__ + 4 * sizeof(c_int) + 2 * sizeof(c_short)
     nlocplus = c_int.from_address(id(frame.f_code) + object.__basicsize__ + tuple.__itemsize__*4 + sizeof(c_int)*6 + sizeof(c_short)*2).value
     default_length = c_int.from_address(stacktop_addr := addr + tuple.__itemsize__ * 8).value + 1
     array_base = stacktop_addr + sizeof(c_int) * 2 + nlocplus * tuple.__itemsize__
-    @lambda c:c(code_addr, stacktop_addr, array_base)
     class stack:
-        def __init__(self, code_addr, stacktop_addr, array_base):
+        def __init__(self, frame, code_addr, stacksize_addr, stacktop_addr, array_base):
+            self.frame = frame
             self.code_addr = code_addr
+            self.stacksize_addr = stacksize_addr
             self.stacktop_addr = stacktop_addr
             self.array_base = array_base
         def __iter__(self):
@@ -116,38 +120,50 @@ def get_stack(depth=0):
             return 0, None
         def push(self, value):
             stacktop = (stacktop_cell := c_int.from_address(self.stacktop_addr)).value
-            while stacktop >= 0:
-                if (tup := self._check(stacktop))[0] == 1 and tup[1].value is self.__class__.push:
+            idx = 0
+            while idx <= stacktop:
+                if (tup := self._check(idx))[0] == 1 and tup[1].value is self.__class__.push:
                     break
-                stacktop -= 1
-            if stacktop < 0:
+                idx += 1
+            else:
                 raise ValueError("stack is full")
-            Py_INCREF(value)
-            tup[1].value = value
-            stacktop_cell.value += 1
+            c_int.from_address(self.stacksize_addr).value += 1
+            co_code = frame.f_code.co_code[frame.f_lasti+2:]
+            i = 0
+            while co_code[i] is EXTENDED_ARG:
+                i += 2
+            if co_code[i] in needs_return:
+                Py_INCREF(value)
+                tup[1].value = value
+                stacktop_cell.value += 1
             return value
         def set_top(self, value):
             stacktop = (stacktop_cell := c_int.from_address(self.stacktop_addr)).value
-            while stacktop >= 0:
-                if stacktop and (tup := self._check(stacktop))[0] == 1 and tup[1].value is self.__class__.set_top:
-                    stacktop -= 1
+            idx = 0
+            while idx <= stacktop:
+                if idx and (tup := self._check(idx))[0] == 1 and tup[1].value is self.__class__.set_top:
+                    idx -= 1
                     break
-                stacktop -= 1
+                idx += 1
             else:
                 raise ValueError("stack is empty")
             Py_INCREF(value)
-            py_object.from_address(self.array_base + tuple.__itemsize__ * stacktop).value = value
-        def pop(self):
+            py_object.from_address(self.array_base + tuple.__itemsize__ * idx).value = value
+        def pop(_, self=0):
+            if _ is not self:
+                Py_INCREF(_)
             stacktop = (stacktop_cell := c_int.from_address(self.stacktop_addr)).value
-            while stacktop >= 0:
-                if stacktop and (tup := self._check(stacktop))[0] == 1 and tup[1].value is self.__class__.pop:
-                    stacktop -= 1
+            idx = 0
+            while idx <= stacktop:
+                if idx and (tup := self._check(idx))[0] == 1 and tup[1].value is self.__class__.pop:
+                    idx -= 1
                     break
-                stacktop -= 1
-            if stacktop < 0:
+                idx += 1
+            else:
                 raise ValueError("stack is empty")
-            cell = py_object.from_address(self.array_base + stacktop * tuple.__itemsize__)
+            cell = py_object.from_address(self.array_base + idx * tuple.__itemsize__)
             old = cell.value
             stacktop_cell.value -= 1
             return old
-    return stack
+    stack.pop.__defaults__ = (res:=stack(frame, code_addr, stacksize_addr, stacktop_addr, array_base),)
+    return res
