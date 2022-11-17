@@ -18,7 +18,7 @@ def gifi(it, b): # get index from iterable
         return it.index(b)
     except:
         # this is for if it is a set, dict, or other such iterable
-        return [i for i, o in it if o == b] or None
+        return ([i for i, o in it if o == b] or [None])[0]
 
 """
 def _gp(y, D={}): # generate primes
