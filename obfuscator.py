@@ -6,20 +6,19 @@ from math import log2, trunc
 
 """
 def gbni(b): # get builtin name index
-    for i, n in enumerate(__builtins__.__dict__):
-        if b == n:
-            return i
+    return __builtins__.__dir__().index(b)
 
 def gosi(b): # get object subclass index
-    for i, n in enumerate(object.__subclasses__()):
-        if b == n:
-            return i
+    return __object__.__subclasses__().index(b)
 """
 
 def gifi(it, b): # get index from iterable
-    for i, x in enumerate(it):
-        if b == x:
-            return i
+    try:
+        # will work if it is list, tuple, or string
+        return it.index(b)
+    except:
+        # this is for if it is a set, dict, or other such iterable
+        return ([i for i, o in it if o == b] or [None])[0]
 
 """
 def _gp(y, D={}): # generate primes
@@ -67,10 +66,10 @@ class Obfuscator:
     _default_object_repr_pair_W = {
         int: "__name__.__len__().__class__",
         str: "__name__.__class__",
-        type: "__name__.__class__.__class__",
-        dict: "__builtins__.__dict__.__class__",
-        True: "....__ne__(__name__)",
-        False: "....__eq__(__name__)",
+        type: "__loader__.__class__",
+        dict: "__annotations__.__class__",
+        True: "__spec__.__eq__(__spec__)",
+        False: "__spec__.__ne__(__spec__)",
         None: "....__doc__",
         object: ("({0}:=__name__.__class__.__class__.__base__)", (), (), ()),
         complex: ("({0}:=({{0}}:=__name__.__ne__(__name__).__invert__()).__truediv__({{0}}:={{0}}.__neg__()).__pow__({{0}}.__truediv__({{0}}.__invert__().__neg__())).__class__)",
@@ -89,10 +88,10 @@ class Obfuscator:
     _default_object_repr_pair = {
         int: "__name__.__len__().__class__",
         str: "__name__.__class__",
-        type: "__name__.__class__.__class__",
-        dict: "__builtins__.__dict__.__class__",
-        True: "....__ne__(__name__)",
-        False: "....__eq__(__name__)",
+        type: "__loader__.__class__",
+        dict: "__annotations__.__class__",
+        True: "__spec__.__eq__(__spec__)",
+        False: "__spec__.__ne__(__spec__)",
         None: "....__doc__",
         object: "__name__.__class__.__class__.__base__",
         complex: "__name__.__ne__(__name__).__invert__().__truediv__(__name__.__eq__(__name__)).__pow__(__name__.__eq__(__name__).__truediv__(__name__.__eq__(__name__).__invert__().__neg__())).__class__",
