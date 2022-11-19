@@ -163,4 +163,4 @@ print(f()) # (5, 7)
 ```
 
 **is_prime.py**<br/>
-Check if a number is prime.
+Check if a number is prime. Requires `/c_extensions/cc.c`.
