@@ -161,3 +161,6 @@ def f():
 
 print(f()) # (5, 7)
 ```
+
+**is_prime.py**<br/>
+Check if a number is prime.
