@@ -463,7 +463,7 @@ cc_int_brstrip(PyObject *self,
     }
     else {
         PyErr_Format(PyExc_TypeError,
-                     "unbound method cc.split() got "
+                     "unbound method cc.brstrip() got "
                      "more arguments than accepted (%zd > 1)",
                      nargs);
     }
@@ -540,6 +540,170 @@ cc.int_brstrip(self, /)\n\
     Strip an integer of trailing zero bits.\n\
 ");
 
+static PyObject *
+cc_int_btshift(PyObject *self,
+               PyObject *const *args,
+               Py_ssize_t nargs)
+{
+    PyObject *err, *res, *e0, *e1;
+    PyLongObject *num, *z;
+    Py_ssize_t _fast_num = 0;
+    Py_ssize_t real_size_num, size_num, newsize, j, i = 0;
+    size_t fast_num, skipped;
+    unsigned long mergeshift, shift;
+    digit dig;
+    twodigits accum = 0;
+
+    if (likely(nargs == 1)) {
+        goto valid_args;
+    }
+
+    if (unlikely(nargs == 0)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "unbound method cc.int_btshift() missing "
+                        "1 required positional argument: 'self'");
+    }
+    else {
+        PyErr_Format(PyExc_TypeError,
+                     "unbound method cc.btshift() got "
+                     "more arguments than accepted (%zd > 1)",
+                     nargs);
+    }
+    return NULL;
+
+  valid_args:
+    num = (PyLongObject *)args[0];
+    if (unlikely(num->ob_digit[0] & 1)) {
+        Py_INCREF(num);
+        return (PyObject *)num;
+    }
+    _fast_num = PyLong_AsSsize_t((PyObject *)num);
+    if (unlikely(_fast_num == -1 && (err = PyErr_Occurred()))) {
+        if (PyErr_GivenExceptionMatches(err, PyExc_OverflowError)) {
+            PyErr_Clear();
+            _fast_num = 0;
+            goto slow_path;
+        }
+        else {
+            return NULL;
+        }
+    }
+    fast_num = (size_t)_fast_num;
+    fast_num >>= (shift = __builtin_ctzll(fast_num));
+    res = PyTuple_New(2);
+    if (unlikely(res == NULL)) {
+        return NULL;
+    }
+    if (_fast_num > 0) {
+        e0 = PyLong_FromSize_t(fast_num);
+        if (unlikely(e0 == NULL)) {
+            Py_DECREF(res);
+            return NULL;
+        }
+        e1 = PyLong_FromUnsignedLong(shift);
+        if (unlikely(e1 == NULL)) {
+            Py_DECREF(res);
+            Py_DECREF(e0);
+            return NULL;
+        }
+    }
+    else if (_fast_num < 0) {
+        e0 = PyLong_FromSsize_t((Py_ssize_t)fast_num);
+        if (unlikely(e0 == NULL)) {
+            Py_DECREF(res);
+            return NULL;
+        }
+        e1 = PyLong_FromUnsignedLong(shift);
+        if (unlikely(e1 == NULL)) {
+            Py_DECREF(res);
+            Py_DECREF(e0);
+            return NULL;
+        }
+    }
+    else {
+        Py_INCREF(zero);
+        Py_INCREF(zero);
+        e0 = e1 = zero;
+    }
+    PyTuple_SET_ITEM(res, 0, e0);
+    PyTuple_SET_ITEM(res, 1, e1);
+    return res;
+  slow_path:
+    for (; unlikely(num->ob_digit[i] == 0); i++);
+    skipped = i;
+    shift = __builtin_ctz(dig = num->ob_digit[i]);
+    mergeshift = PyLong_SHIFT - shift;
+    accum = dig >> shift;
+    real_size_num = Py_SIZE(num);
+    size_num = Py_ABS(real_size_num);
+    newsize = size_num - i;
+    switch (newsize) {
+        case 2:
+            _fast_num = (Py_ssize_t)num->ob_digit[i + 1] << mergeshift;
+        case 1:
+            _fast_num |= accum;
+            _fast_num = real_size_num > 0 ? _fast_num : -_fast_num;
+            res = PyTuple_New(2);
+            if (unlikely(res == NULL)) {
+                return NULL;
+            }
+            e0 = PyLong_FromSsize_t(_fast_num);
+            if (unlikely(e0 == NULL)) {
+                Py_DECREF(res);
+                return NULL;
+            }
+            e1 = PyLong_FromUnsignedLong(skipped*30 + shift);
+            if (unlikely(e1 == NULL)) {
+                Py_DECREF(res);
+                Py_DECREF(e0);
+                return NULL;
+            }
+            PyTuple_SET_ITEM(res, 0, e0);
+            PyTuple_SET_ITEM(res, 1, e1);
+            return res;
+        default:
+            break;
+    }
+    z = _PyLong_New(newsize);
+    if (unlikely(z == NULL)) {
+        return NULL;
+    }
+    for (j = i + 1, i = 0; j < size_num;) {
+        accum |= (twodigits)num->ob_digit[j++] << mergeshift;
+        z->ob_digit[i++] = (digit)(accum & PyLong_MASK);
+        accum >>= PyLong_SHIFT;
+    }
+    if (likely(accum != 0)) {
+        z->ob_digit[newsize - 1] = (digit)accum;
+    }
+    else {
+        Py_SET_SIZE(z, newsize = newsize - 1);
+    }
+    if (unlikely(real_size_num < 0)) {
+        Py_SET_SIZE(z, -newsize);
+    }
+    res = PyTuple_New(2);
+    if (unlikely(res == NULL)) {
+        Py_DECREF(z);
+        return NULL;
+    }
+    e1 = PyLong_FromUnsignedLong(skipped*30 + shift);
+    if (unlikely(e1 == NULL)) {
+        Py_DECREF(res);
+        Py_DECREF(z);
+        return NULL;
+    }
+    PyTuple_SET_ITEM(res, 0, (PyObject *)z);
+    PyTuple_SET_ITEM(res, 1, e1);
+    return res;
+}
+
+PyDoc_STRVAR(cc_int_btshift__doc__, "\
+cc.int_btshift(self, /)\n\
+    Strip an integer of trailing zero bits. Returns\n\
+    (stripped integer, shift).\n\
+");
+
 #define METH_FASTCALL_DOC(name) \
     {#name, (PyCFunction)(void(*)(void))cc_ ## name, METH_FASTCALL, cc_ ## name ## __doc__},
 
@@ -551,6 +715,7 @@ static PyMethodDef CCMethods[] = {
     METH_FASTCALL_KEYWORDS_DOC(split)
 
     METH_FASTCALL_DOC(int_brstrip)
+    METH_FASTCALL_DOC(int_btshift)
 
     {NULL}
 };
