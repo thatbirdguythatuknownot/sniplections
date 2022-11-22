@@ -70,7 +70,7 @@ class Obfuscator:
         dict: "__annotations__.__class__",
         True: "__spec__.__eq__(__spec__)",
         False: "__spec__.__ne__(__spec__)",
-        None: "....__doc__",
+        None: "__annotations__.__lt__(__name__).__doc__",
         object: ("({0}:=__name__.__class__.__class__.__base__)", (), (), ()),
         complex: ("({0}:=({{0}}:=__name__.__ne__(__name__).__invert__()).__truediv__({{0}}:={{0}}.__neg__()).__pow__({{0}}.__truediv__({{0}}.__invert__().__neg__())).__class__)",
                   (), (), ()),
@@ -92,7 +92,7 @@ class Obfuscator:
         dict: "__annotations__.__class__",
         True: "__spec__.__eq__(__spec__)",
         False: "__spec__.__ne__(__spec__)",
-        None: "....__doc__",
+        None: "__annotations__.__lt__(__name__).__doc__",
         object: "__name__.__class__.__class__.__base__",
         complex: "__name__.__ne__(__name__).__invert__().__truediv__(__name__.__eq__(__name__)).__pow__(__name__.__eq__(__name__).__truediv__(__name__.__eq__(__name__).__invert__().__neg__())).__class__",
         open: ("__builtins__.__dict__.__getitem__({1})", (), ("open",), ()),
@@ -109,8 +109,8 @@ class Obfuscator:
     _default_nonassigned = {object, complex, open, oct, re, __import__, setattr, slice, globals, ""}
     def __init__(self, taken=None):
         self.cache = {
-            0: "__name__.__ne__(__name__)",
-            1: "__name__.__eq__(__name__)"
+            0: "().__len__()",
+            1: "((),).__len__()",
         }
         self.no_walrus = taken is False
         if self.no_walrus:
@@ -264,8 +264,8 @@ class Obfuscator:
         """.c(): clear
         Clears/resets obfuscator caches."""
         self.cache = {
-            0: "__name__.__ne__(__name__)",
-            1: "__name__.__eq__(__name__)"
+            0: "().__len__()",
+            1: "((),).__len__()",
         }
         if self.no_walrus:
             self.object_repr_pair = self._default_object_repr_pair.copy()
