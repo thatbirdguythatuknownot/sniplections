@@ -1,16 +1,41 @@
+"""
+Rules:
+    Allowed operators:
+        attribute access:                               "."
+        item separator:                                 ","
+        call operator, with args but no kwargs:         "([args])"
+    The only builtin (provided by Python) identifiers that are allowed to be used are dunders
+        For example, sum is not allowed but __import__ is. Instead, use __builtins__:
+        __builtins__.__getattribute__([expression that builds the string name of what you want])
+        If the identifier needed is local or global, instead of part of __builtins__, use
+        __builtins__ to get either globals or locals and use as needed.
+        other methods can be used, but __builtins__ access is probably the 
+        shortest and most version compatible way to do it
+    The only (direct) attribute access allowed is dunder attributes
+        the following is to be used instead of someobj.someattr:
+        someobj.__getattribute__([expression that builds the string "someattr"])
+    No keywords
+    No constant expressions
+    No statements (such as "x = y")
+    
+    Additionally, if walrus assignment is enabled, the following may be used:
+        walrus operator (:=)
+"""
+
+
 import importlib, re
 from ast import *
 from ast import _Precedence, _Unparser
 from functools import cache, reduce
 from math import log2, trunc
 
-"""
-def gbni(b): # get builtin name index
-    return __builtins__.__dir__().index(b)
 
-def gosi(b): # get object subclass index
-    return __object__.__subclasses__().index(b)
-"""
+#def gbni(b): # get builtin name index
+#    return __builtins__.__dir__().index(b)
+
+#def gosi(b): # get object subclass index
+#    return __object__.__subclasses__().index(b)
+
 
 def gifi(it, b): # get index from iterable
     try:
@@ -20,18 +45,18 @@ def gifi(it, b): # get index from iterable
         # this is for if it is a set, dict, or other such iterable
         return ([i for i, o in it if o == b] or [None])[0]
 
-"""
-def _gp(y, D={}): # generate primes
-    q = 2
-    while q < y:
-        if q not in D:
-            yield q
-            D[q * q] = [q]
-        else:
-            for p in D[q]:
-                D.setdefault(p + q, []).append(p)
-            del D[q]
-        q += 1
+
+#def _gp(y, D={}): # generate primes
+#    q = 2
+#    while q < y:
+#        if q not in D:
+#            yield q
+#            D[q * q] = [q]
+#        else:
+#            for p in D[q]:
+#                D.setdefault(p + q, []).append(p)
+#            del D[q]
+#        q += 1
 
 @cache
 def gpf(x): # greatest prime factor
@@ -39,7 +64,7 @@ def gpf(x): # greatest prime factor
     if factors:
         return factors[len(factors) >> 1]
     return x
-"""
+
 
 @cache
 def gpf(x): # greatest . factor
@@ -48,7 +73,7 @@ def gpf(x): # greatest . factor
 class Obfuscator:
     """Obfuscator(taken=None)
     Obfuscate Python code. Outputs code with underscore-only names
-    and dunder-only attributes.
+    and dunder-only attributes, using no constants.
 
         taken = None
             Predefined set of names. Will be cleared if called by `.c()`.
@@ -70,8 +95,8 @@ class Obfuscator:
         dict: "__annotations__.__class__",
         True: "__spec__.__eq__(__spec__)",
         False: "__spec__.__ne__(__spec__)",
-        None: "....__doc__",
-        object: ("({0}:=__name__.__class__.__class__.__base__)", (), (), ()),
+        None: "__name__.__getstate__()",
+        object: ("({0}:=__name__.__class__.__base__)", (), (), ()),
         complex: ("({0}:=({{0}}:=__name__.__ne__(__name__).__invert__()).__truediv__({{0}}:={{0}}.__neg__()).__pow__({{0}}.__truediv__({{0}}.__invert__().__neg__())).__class__)",
                   (), (), ()),
         open: ("({0}:=__builtins__.__dict__.__getitem__({1}))", (), ("open",), ()),
@@ -92,8 +117,8 @@ class Obfuscator:
         dict: "__annotations__.__class__",
         True: "__spec__.__eq__(__spec__)",
         False: "__spec__.__ne__(__spec__)",
-        None: "....__doc__",
-        object: "__name__.__class__.__class__.__base__",
+        None: "__name__.__getstate__()",
+        object: "__name__.__class__.__base__",
         complex: "__name__.__ne__(__name__).__invert__().__truediv__(__name__.__eq__(__name__)).__pow__(__name__.__eq__(__name__).__truediv__(__name__.__eq__(__name__).__invert__().__neg__())).__class__",
         open: ("__builtins__.__dict__.__getitem__({1})", (), ("open",), ()),
         oct: ("__builtins__.__dict__.__getitem__(__builtins__.__dir__().__getitem__({1}))",
@@ -109,8 +134,8 @@ class Obfuscator:
     _default_nonassigned = {object, complex, open, oct, re, __import__, setattr, slice, globals, ""}
     def __init__(self, taken=None):
         self.cache = {
-            0: "__name__.__ne__(__name__)",
-            1: "__name__.__eq__(__name__)"
+            0: "__name__.__len__().__class__()",
+            1: "__name__.__eq__(__name__).__int__()",
         }
         self.no_walrus = taken is False
         if self.no_walrus:
@@ -264,8 +289,8 @@ class Obfuscator:
         """.c(): clear
         Clears/resets obfuscator caches."""
         self.cache = {
-            0: "__name__.__ne__(__name__)",
-            1: "__name__.__eq__(__name__)"
+            0: "().__len__()",
+            1: "((),).__len__()",
         }
         if self.no_walrus:
             self.object_repr_pair = self._default_object_repr_pair.copy()
@@ -318,12 +343,12 @@ class UnparseObfuscate(_Unparser, Obfuscator):
             s = None
             do_parens = False
             if res := (self.unparse_cache.get(node)
-                    or self.unparse_cache.get(s := self._unparser.visit(node))):
+                       or self.unparse_cache.get(s := self._unparser.visit(node))):
                 if s:
                     self._unparser._source.clear()
                 return res
             self._unparser._source.clear()
-            if name is None and name is not False and node.__class__ not in self._forbidden_named:
+            if name is None and node.__class__ not in self._forbidden_named:
                 name = self.get_name()
                 if self.get_precedence(node) > _Precedence.NAMED_EXPR:
                     do_parens = True
