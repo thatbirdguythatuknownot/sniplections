@@ -342,7 +342,8 @@ class UnparseObfuscate(_Unparser, Obfuscator):
         else:
             s = None
             do_parens = False
-            if res := (self.unparse_cache.get(node) or self.unparse_cache.get(s := self._unparser.visit(node))):
+            if res := (self.unparse_cache.get(node)
+                       or self.unparse_cache.get(s := self._unparser.visit(node))):
                 if s:
                     self._unparser._source.clear()
                 return res
