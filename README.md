@@ -164,3 +164,11 @@ print(f()) # (5, 7)
 
 **is_prime.py**<br/>
 Check if a number is prime. Requires `/c_extensions/cc.c`.
+
+**get_code.py**<br/>
+Get the line(s) of code of a specific statement, along with its start and end line. Works only for Python 3.8+ and with (temporary) Python files. To be used like this:
+```py
+from get_code import get_line_and_code
+a = get_line_and_code()[2]
+print(a) # a = get_line_and_code()[2]
+```
