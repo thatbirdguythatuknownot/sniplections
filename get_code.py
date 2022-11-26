@@ -3,7 +3,7 @@ from itertools import islice, takewhile
 from linecache import getline
 from sys import _getframe
 
-def get_line_and_code(depth):
+def get_line_and_code(depth=0):
     lasti = (frame := _getframe(depth + 1)).f_lasti
     lineno = frame.f_lineno
     lines = [*takewhile(lambda x: x[0] != lasti, findlinestarts(frame.f_code))]
