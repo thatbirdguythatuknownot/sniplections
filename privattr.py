@@ -9,7 +9,7 @@ class Private:
         all_code = set()
         for f in ns.values():
             if isinstance(f, FunctionType):
-                all_code.add(f)
+                all_code.add(f.__code__)
             elif isinstance(f, property):
                 if f.fdel: all_code.add(f.fdel.__code__)
                 if f.fget: all_code.add(f.fget.__code__)
