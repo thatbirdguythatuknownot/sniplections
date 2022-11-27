@@ -21,6 +21,8 @@ If file has no extension, it can be simply run as `file`. Full help message show
 **throwaway.py**<br/>
 Decorator to "throw away" extra unpacking values. Works like such:
 ```py
+from throwaway import throwaway_extra_unpack
+
 @throwaway_extra_unpack
 def a(x):
     b, c, d = x
@@ -66,6 +68,8 @@ unparsed_roblox_lua_code = lua_transpiler(python_code_as_string, luau=True)
 **dynamic_dispatch.py**<br/>
 Overloading for Python functions. To be used like this:
 ```py
+from dynamic_dispatch import dynamic_dispatch
+
 @dynamic_dispatch
 def baz(x: int, y: int) -> int:
     return x + y
@@ -84,6 +88,8 @@ print(baz(2, 7.5)) # baz(x: int, y: float)
 (Credits to <@!310449948011528192> (@dzshn#1312) for the original 3.10 code)<br/>
 Mutate code in runtime. Works in 3.11 only. To be used like this:
 ```py
+from runtime_mutate import mutate
+
 def uhm():
     x = 143
     mutate(
@@ -106,6 +112,7 @@ print(uhm()) # 21450
 Inline variables, globals, builtins, and replace constants. Works in 3.11 only. To be used like this:
 ```py
 from dis import dis
+from inline import inline_globals, inline_var
 
 s = 5
 
@@ -144,6 +151,8 @@ Output:
 **privattr.py**<br/>
 Private- actually protected- attribute metaclass. To be used like this:
 ```py
+from privattr import Private
+
 class Foo(metaclass=Private):
     attr1: Private
     attr2: Private
