@@ -9,7 +9,6 @@ Rules for the obfuscator:
                               the obfuscator
     Only dunders (e.g. `__some_dunder__`) or underscores (e.g. `____`) are
     the allowed identifiers (names/attributes).
-
     The obfuscator unparser class may not follow these rules when it
     encounters a node that cannot be obfuscated easily. It may also replace
     names that refer to builtins with the builtin's representation. Example:
@@ -212,8 +211,6 @@ class Obfuscator:
                 *map(self.on, v[3])
             )
             return res, None
-        if x in self._nonassigned:
-            self._nonassigned.remove(x)
         if name is None:
             name = self.nn()
         res = v[0].format(
@@ -222,6 +219,10 @@ class Obfuscator:
             *map(self.gs, v[2]),
             *map(self.on, v[3])
         )
+        if ".*." in res:
+            return ".*.", ".*."
+        if x in self._nonassigned:
+            self._nonassigned.remove(x)
         d[x] = name
         return res, name
     
@@ -459,7 +460,7 @@ class UnparseObfuscate(_Unparser, Obfuscator):
         it = iter(nn := node.names)
         self.write(f"({self.get_name((_name := next(it)).asname)}:={val}({self.gs(_name.name)}))")
         self.interleave(lambda: self.write(','),
-                        lambda _name: f"({self.get_name(_name.asname)}:={name}({self.gs(_name.name)}))",
+                        lambda _name: self.write(f"({self.get_name(_name.asname)}:={name}({self.gs(_name.name)}))"),
                         it)
     
     visit_ImportFrom = not_implemented
