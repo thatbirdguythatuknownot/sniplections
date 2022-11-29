@@ -9,6 +9,7 @@ Rules for the obfuscator:
                               the obfuscator
     Only dunders (e.g. `__some_dunder__`) or underscores (e.g. `____`) are
     the allowed identifiers (names/attributes).
+
     The obfuscator unparser class may not follow these rules when it
     encounters a node that cannot be obfuscated easily. It may also replace
     names that refer to builtins with the builtin's representation. Example:
