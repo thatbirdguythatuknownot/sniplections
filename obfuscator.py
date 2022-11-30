@@ -212,8 +212,6 @@ class Obfuscator:
                 *map(self.on, v[3])
             )
             return res, None
-        if x in self._nonassigned:
-            self._nonassigned.remove(x)
         if name is None:
             name = self.nn()
         res = v[0].format(
@@ -222,6 +220,10 @@ class Obfuscator:
             *map(self.gs, v[2]),
             *map(self.on, v[3])
         )
+        if ".*." in res:
+            return ".*.", ".*."
+        if x in self._nonassigned:
+            self._nonassigned.remove(x)
         d[x] = name
         return res, name
     
@@ -459,7 +461,7 @@ class UnparseObfuscate(_Unparser, Obfuscator):
         it = iter(nn := node.names)
         self.write(f"({self.get_name((_name := next(it)).asname)}:={val}({self.gs(_name.name)}))")
         self.interleave(lambda: self.write(','),
-                        lambda _name: f"({self.get_name(_name.asname)}:={name}({self.gs(_name.name)}))",
+                        lambda _name: self.write(f"({self.get_name(_name.asname)}:={name}({self.gs(_name.name)}))"),
                         it)
     
     visit_ImportFrom = not_implemented
