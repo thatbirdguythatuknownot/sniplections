@@ -181,3 +181,10 @@ from get_code import get_line_and_code
 a = get_line_and_code()[2]
 print(a) # a = get_line_and_code()[2]
 ```
+
+**vm.py**<br/>
+A VM made in Python to display text generated with pseudo-assembly instructions for Advent of Code 2022, Day 10. Used like:
+```
+python vm.py <columns> "<symbols>" <lines>
+<input from stdin>
+```
