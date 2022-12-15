@@ -374,7 +374,7 @@ class Obfuscator:
             self.cache = self._default_cache_W.copy()
             self._nonassigned = self._default_nonassigned.copy()
 
-builtins_dict = __builtins__.__dict__
+builtins_dict = __builtins__.__dict__ if __name__ == "__main__" else __builtins__
 
 class UnparseObfuscate(_Unparser, Obfuscator):
     def __init__(self, taken=None):
