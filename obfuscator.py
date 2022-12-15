@@ -9,23 +9,35 @@ Rules for the obfuscator:
                               the obfuscator
     Only dunders (e.g. `__some_dunder__`) or underscores (e.g. `____`) are
     the allowed identifiers (names/attributes).
+
     The obfuscator unparser class may not follow these rules when it
     encounters a node that cannot be obfuscated easily. It may also replace
     names that refer to builtins with the builtin's representation. Example:
+
     print(int("5"))
+
     ...will result in...
+
     <obfuscated print>(<obfuscated int>(<obfuscated "5">))
+
     Take note that this will not work when a builtin is assigned to, but the
     code only detects builtins assigned in the normal way.
+
     int = lambda x: x+2
     int(5)
+
     ...should result in...
+
     <obfuscated name 0>=lambda <obfuscated name 1>:<obfuscated name 1>.__add__(<obfuscated 2>)
     <obfuscated name 0>(<obfuscated 5>)
+
     ...and...
+
     globals()["int"] = lambda x: x+2
     int(5)
+
     ...should result in...
+
     <obfuscated globals>().__setitem__(<obfuscated "int">,lambda <obfuscated name 0>:<obfuscated name 0>.__add__(<obfuscated 2>))
     <obfuscated int>(5)
 """
