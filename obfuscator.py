@@ -265,15 +265,17 @@ class Obfuscator:
         if not self.no_walrus:
             name = name or self.nn()
             self._uc(v, name)
-            if isinstance(v, int): # use `isinstance` instead of `type(v) is`
-                                   # because of `bool`
-                _name, res = self.on(v, name)[1:-1].split(':=')
-                del self.cache[_name]
-                self.taken.remove(_name)
+            if type(v) is int:
+                res = self.on(v, name)
+                if ':=' in res:
+                    _name, res = res[1:-1].split(':=',1)
+                    self.taken.remove(_name)
                 self.cache[v] = name
                 return f"({name}:={res})"
             if (type_v := type(v)) is str:
                 return self.gs(v, name)
+            if hasattr(v, "__hash__") and v.__hash__ and v in self.object_repr_pair:
+                return self.porpv(v, name)[0]
             if v in __builtins__.__dict__.values():
                 return "({}:=__builtins__.__getattribute__({}))".format(
                     name,
@@ -297,16 +299,14 @@ class Obfuscator:
                     name,
                     self.ge(tuple(v.items()))
                 )
-            try:
-                return self.porpv(v, name)[0]
-            except KeyError:
-                pass
+            return self.porpv(None, name)[0]
         else:
-            if isinstance(v, int): # use `isinstance` instead of `type(v) is`
-                                   # because of `bool`
+            if type(v) is int:
                 return self._uc(v, self.on(v))
             if (type_v := type(v)) is str:
                 return self._uc(v, self.gs(v))
+            if hasattr(v, "__hash__") and v.__hash__ and v in self.object_repr_pair:
+                return self._uc(v, self.porpv(v)[0])
             if v in __builtins__.__dict__.values():
                 return self._uc(v, "__builtins__.__getattribute__({})".format(
                     self.gs(gifi(__builtins__.__dict__, v))
@@ -327,10 +327,7 @@ class Obfuscator:
                 return self._uc(v, "__annotations__.__class__({})".format(
                     self.ge(tuple(v.items()))
                 ))
-            try:
-                return self.porpv(v)[0]
-            except KeyError:
-                pass
+            return self._uc(v, self.porpv(None)[0])
         # If all paths above didn't work, `v` is one of the following:
         #     1. an instance of a builtin class that isn't
         #        supported by another of the obfuscators methods
@@ -339,13 +336,10 @@ class Obfuscator:
         #     4. a generator
         # in that case, return `None` obfuscated.
         
-        # Of course we could just use the string in the object repr pair,
+        # For anyone questoning why use `.porpv()` for `None`, well of
+        # course we could just use the string in the object repr pair,
         # but something might change that'll make it easier to do stuff
         # when we use `.porpv()`.
-        # Using `name` as a second argument is fine and will work for all
-        # cases since `.porpv()` ignores a non-`None` second argument when
-        # `.no_walrus` is `True`.
-        return self.porpv(None, name)[0]
     
     def on(self, x, name_=None):
         """.on(x, name_=None): obfuscate number
@@ -379,7 +373,7 @@ class Obfuscator:
             if q > 4 and (qb := log2(q)).is_integer():
                 qb = trunc(qb)
                 if p > 4 and (pb := log2(p)).is_integer() and pb < qb:
-                    pb, qb = qb, trunc(pb)
+                    pb, qb = qb, trunc(pb) + 1
                 q = qb
                 method = "lshift"
             res = f"{self.on(p, name)}.__{method}__({self.on(q, name)})" \
