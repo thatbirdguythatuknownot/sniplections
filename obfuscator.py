@@ -9,7 +9,6 @@ Rules for the obfuscator:
                               the obfuscator
     Only dunders (e.g. `__some_dunder__`) or underscores (e.g. `____`) are
     the allowed identifiers (names/attributes).
-
     The obfuscator unparser class may not follow these rules when it
     encounters a node that cannot be obfuscated easily. It may also replace
     names that refer to builtins with the builtin's representation. Example:
@@ -54,6 +53,7 @@ from math import log2, trunc
 """
 def gbni(b): # get builtin name index
     return __builtins__.__dir__().index(b)
+
 def gosi(b): # get object subclass index
     return object.__subclasses__().index(b)
 """
@@ -80,6 +80,7 @@ def _gp(y, D={}): # generate primes
                 D.setdefault(p + q, []).append(p)
             del D[q]
         q += 1
+
 @cache
 def gpf(x): # greatest prime factor
     factors = [i for i in _gp(trunc(x**.5 + 1)) if not x % i]
@@ -92,18 +93,38 @@ def gpf(x): # greatest prime factor
 def gpf(x): # greatest . factor
     return next((i for i in range(trunc(x**.5 + 1), 1, -1) if not x % i), x)
 
+class no_hash_dict:
+    def __init__(self, **kwargs):
+        self.keys = list(kwargs)
+        self.vals = list(kwargs.values())
+    def __contains__(self, val):
+        return val in self.keys
+    def __getitem__(self, key):
+        return self.vals[self.keys.index(key)]
+    def __setitem__(self, key, val):
+        try:
+            self.vals[self.keys.index(key)] = val
+        except ValueError:
+            self.keys.append(key)
+            self.vals.append(val)
+    def __repr__(self):
+        return f"no_hash_dict keys={self.keys!r} vals={self.vals!r}"
+
 class Obfuscator:
     """Obfuscator(taken=None)
     Obfuscate Python code. Outputs code with underscore-only names,
     dunder-only attributes, and no constants.
+
         taken = None
             Predefined set of names. Will be cleared if called by `.c()`.
             By default None, which is then replaced with an empty set. Passing
             True will also create an empty set.
             If `taken = False`, "no walrus" mode is activated.
+
     Function documentation:
         .<abbreviated name>(<args>): <expanded name> [-- <flags>]
             <description>
+
     Flags:
         W -> requires walrus operator
     """
@@ -164,26 +185,7 @@ class Obfuscator:
     def __init__(self, taken=None):
         self.forbidden_chars = set()
         self.no_walrus = taken is False
-        self.ge_cache = type(
-            "no_hash_dict",
-            (),
-            {
-                "__init__" : (lambda self, **kwargs:
-                    self.__setattr__("keys", list(kwargs.keys())) or \
-                    self.__setattr__("vals", list(kwargs.values()))
-                ),
-                "__contains__" : (lambda self, val: val in self.keys),
-                "__getitem__" : (lambda self, key: self.vals[self.keys.index(key)]),
-                "__setitem__" : (lambda self, key, val:
-                    (
-                        self.vals.__setitem__(self.keys.index(key), val)
-                            if key in self.keys else
-                        (self.keys.append(key), self.vals.append(val)),
-                        None
-                    )[-1]
-                ),
-            }
-        )()
+        self.ge_cache = no_hash_dict()
         if self.no_walrus:
             self.object_repr_pair = self._default_object_repr_pair.copy()
             self.cache = self._default_cache.copy()
@@ -195,55 +197,9 @@ class Obfuscator:
             self.cache = self._default_cache_W.copy()
             self._nonassigned = self._default_nonassigned.copy()
     
-    def ge(self, v):
-        """.ge(): get expression
-        Returns an obfuscated string that when evaluated is equivilant to `v`.
-        Upon error, returns -1. If v is in self.ge_cache then return from
-        self.ge_cache, otherwise will create a new obfuscated string, and add
-        it to self.ge_cache."""
-        if v in self.ge_cache:
-            return self.ge_cache[v]
-        update_cache = lambda val: (self.ge_cache.__setitem__(v, val), val)[-1]
-        if self.no_walrus:
-            try:
-                return update_cache(self.porpv(v)[0])
-            except:
-                pass
-            if isinstance(v, int): # use `isinstance` instead of `type(v) is` because of bool
-                return update_cache(self.on(v))
-            if type(v) is str:
-                return update_cache(self.gs(v))
-            if v in __builtins__.__dict__.values():
-                return update_cache("__builtins__.__getattribute__({0})".format(
-                    self.gs(gifi(__builtins__.__dict__, v))
-                ))
-            if ((type(v) is type) or (type in type(v).__bases__)) and (type(v).__new__ is type.__new__):
-                return update_cache("{0}({1},{2},{3})".format(
-                    self.ge(type(v)),
-                    self.gs(v.__name__),
-                    self.ge(v.__bases__),
-                    self.ge(dict(v.__dict__))
-                ))
-            if type(v) is tuple:
-                return update_cache(("__loader__.__bases__.__class__()" + \
-                    ".__add__(({},))" * len(v)).format(*map(self.ge, v))
-                )
-            if type(v) is dict:
-                return update_cache("__annotations__.__class__({})".format(
-                    self.ge(tuple(v.items()))
-                ))
-            
-            # if we've gotten here, v is one of the following:
-            #     1. an instance of a builtin class that isn't
-            #        supported by another of the obfuscators methods
-            #     2. an instance of a non-builtin class
-            #     3. a (user-defined) function
-            #     4. a generator
-        else:
-            # for now, ge cannot handle walrus
-            raise type("WalrusError", (Exception,), {})(
-                "ge doesn't support walrus mode yet, use Obfuscator(taken=None) instead."
-            )
+    def _uc(self, v, val): # update [get expression] cache
+        self.ge_cache[v] = val
+        return val
     
     def nnu(self):
         """.nnu(): new name unmodified -- W
@@ -296,6 +252,100 @@ class Obfuscator:
         d[x] = name
         return res, name
     
+    def ge(self, v, name=None):
+        """.ge(v): get expression
+        Returns an obfuscated string that, when evaluated, is equivalent to `v`.
+        Upon error, return -1. Upon not finding a suitable logic for `v`,
+        return `None` obfuscated."""
+        try:
+            return self.ge_cache[v]
+        except ValueError:
+            pass
+        if not self.no_walrus:
+            name = name or self.nn()
+            self._uc(v, name)
+            if isinstance(v, int): # use `isinstance` instead of `type(v) is`
+                                   # because of `bool`
+                _name, res = self.on(v, name)[1:-1].split(':=')
+                del self.cache[_name]
+                self.taken.remove(_name)
+                self.cache[v] = name
+                return f"({name}:={res})"
+            if (type_v := type(v)) is str:
+                return self.gs(v, name)
+            if v in __builtins__.__dict__.values():
+                return "({}:=__builtins__.__getattribute__({}))".format(
+                    name,
+                    self.gs(gifi(__builtins__.__dict__, v))
+                )
+            if (type_v is type or type in type_v.__bases__) and type_v.__new__ is type.__new__:
+                return "({}:={}({},{},{}))".format(
+                    name,
+                    self.ge(type_v),
+                    self.gs(v.__name__),
+                    self.ge(v.__bases__),
+                    self.ge(dict(v.__dict__))
+                )
+            if type_v is tuple:
+                return (
+                    "({}:=__loader__.__bases__.__class__()"
+                    f"{'.__add__(({},))' * len(v)})"
+                ).format(*map(self.ge, v))
+            if type_v is dict:
+                return "({}:=__annotations__.__class__({}))".format(
+                    name,
+                    self.ge(tuple(v.items()))
+                )
+            try:
+                return self.porpv(v, name)[0]
+            except KeyError:
+                pass
+        else:
+            if isinstance(v, int): # use `isinstance` instead of `type(v) is`
+                                   # because of `bool`
+                return self._uc(v, self.on(v))
+            if (type_v := type(v)) is str:
+                return self._uc(v, self.gs(v))
+            if v in __builtins__.__dict__.values():
+                return self._uc(v, "__builtins__.__getattribute__({})".format(
+                    self.gs(gifi(__builtins__.__dict__, v))
+                ))
+            if (type_v is type or type in type_v.__bases__) and type_v.__new__ is type.__new__:
+                return self._uc(v, "{}({},{},{})".format(
+                    self.ge(type_v),
+                    self.gs(v.__name__),
+                    self.ge(v.__bases__),
+                    self.ge(dict(v.__dict__))
+                ))
+            if type_v is tuple:
+                return self._uc(v, (
+                    "__loader__.__bases__.__class__()"
+                    f"{'.__add__(({},))' * len(v)}"
+                ).format(*map(self.ge, v)))
+            if type_v is dict:
+                return self._uc(v, "__annotations__.__class__({})".format(
+                    self.ge(tuple(v.items()))
+                ))
+            try:
+                return self.porpv(v)[0]
+            except KeyError:
+                pass
+        # If all paths above didn't work, `v` is one of the following:
+        #     1. an instance of a builtin class that isn't
+        #        supported by another of the obfuscators methods
+        #     2. an instance of a non-builtin class
+        #     3. a (user-defined) function
+        #     4. a generator
+        # in that case, return `None` obfuscated.
+        
+        # Of course we could just use the string in the object repr pair,
+        # but something might change that'll make it easier to do stuff
+        # when we use `.porpv()`.
+        # Using `name` as a second argument is fine and will work for all
+        # cases since `.porpv()` ignores a non-`None` second argument when
+        # `.no_walrus` is `True`.
+        return self.porpv(None, name)[0]
+    
     def on(self, x, name_=None):
         """.on(x, name_=None): obfuscate number
         Obfuscate a number. `name_` is the temporary name used for temporary
@@ -334,7 +384,7 @@ class Obfuscator:
             res = f"{self.on(p, name)}.__{method}__({self.on(q, name)})" \
                   f"""{'.__invert__().__neg__()' if add == 1 else
                      f'.__add__({self.on(add, name)})' if add else ''}"""
-            x = orig_x # for setting to values[x] later
+            x = orig_x # for setting to `values[x]` later
         else:
             res = f"""{reduce("{}.__add__({})".format,
                               [f"__name__.__getitem__({self.on(0)})"]*x
@@ -342,6 +392,7 @@ class Obfuscator:
                               [f"({name}:=__name__.__getitem__({self.on(0)}))"]
                               +[name]*(x-1))}.__len__()"""
         if self.no_walrus:
+            values[x] = res
             return res
         values[x] = resname = self.nn() if name_ else name
         return f"({resname}:={res})"
@@ -407,7 +458,7 @@ class Obfuscator:
                 return rep, r, True
         return self.porpv(chr)[0], ord(c), False
     
-    def gs(self, s):
+    def gs(self, s, name=None):
         """.gs(s): get string
         Gets the obfuscated representation of string `s`."""
         values = self.cache
@@ -421,7 +472,7 @@ class Obfuscator:
             res = reduce("{}.__add__({})".format, l)
             values[s] = res
             return res
-        name = self.nn()
+        name = name or self.nn()
         l = []
         for c in s:
             rep, idx, to_getitem = self.gdci(c, name)
@@ -434,6 +485,7 @@ class Obfuscator:
         """.c(): clear
         Clears/resets obfuscator caches."""
         self.forbidden_chars = set()
+        self.ge_cache = no_hash_dict()
         if self.no_walrus:
             self.object_repr_pair = self._default_object_repr_pair.copy()
             self.cache = self._default_cache.copy()
