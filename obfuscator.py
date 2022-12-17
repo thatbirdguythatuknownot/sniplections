@@ -278,41 +278,41 @@ class Obfuscator:
         res = self.porpv(None)[0]
         type_v = type(v)
         if is_num_or_str := type_v in (int, float):
-            res = self._uc(v, self.on(v))
+            res = self.on(v)
         elif is_num_or_str := type_v is str:
-            res = self._uc(v, self.gs(v))
+            res = self.gs(v)
         elif is_porpvd := hasattr(v, "__hash__") and v.__hash__ and v in self.object_repr_pair:
             res = self._uc(v, self.porpv(v)[0])
         elif v in __builtins__.__dict__.values():
-            res = self._uc(v, (
-                    "__builtins__.__getattribute__("
-                    "__builtins__.__dir__().__getitem__({}))"
-                ).format(
+            res = (
+                "__builtins__.__getattribute__("
+                "__builtins__.__dir__().__getitem__({}))"
+            ).format(
                 self.on(__builtins__.__dir__().index(gifi(__builtins__.__dict__, v)))
-            ))
+            )
         elif v in object.__subclasses__():
-            res = self._uc(v, "{}.__subclasses__().__getitem__()".format(
+            res = "{}.__subclasses__().__getitem__()".format(
                 self.ge(object),
                 self.on(object.__subclasses__().index(v)),
-            ))
+            )
         elif (type_v is type or type in type_v.__bases__) and type_v.__new__ is type.__new__:
-                return self._uc(v, "{}({},{},{})".format(
+                res = "{}({},{},{})".format(
                     self.ge(type_v),
                     self.gs(v.__name__),
                     self.ge(v.__bases__),
                     self.ge(dict(v.__dict__))
-                ))
+                )
         elif type_v is tuple:
-            res = self._uc(v, (
+            res = (
                 "__loader__.__bases__.__class__()"
                 f"{'.__add__(({},))' * len(v)}"
-            ).format(*map(self.ge, v)))
+            ).format(*map(self.ge, v))
         elif type_v is dict:
-            res = self._uc(v, "__annotations__.__class__({})".format(
+            res = "__annotations__.__class__({})".format(
                 self.ge(tuple(v.items()))
-            ))
+            )
         if self.no_walrus:
-            return res
+            return self._uc(v, res)
         else:
             name = name or self.nn()
             if is_num_or_str:
