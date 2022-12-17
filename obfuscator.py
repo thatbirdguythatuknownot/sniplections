@@ -47,6 +47,7 @@ import builtins as __builtins__
 import importlib, re
 from ast import *
 from ast import _Precedence, _Unparser
+from fractions import Fraction
 from builtins import *
 from functools import cache, reduce
 from math import log2, trunc
@@ -261,7 +262,7 @@ class Obfuscator:
         if v in self.ge_cache:
             return self.ge_cache[v]
         # Default to `None` obfuscated.
-        # If res is unchanged, that means that v is one of the following
+        # If `res` is unchanged, that means that `v` is one of the following:
         #     1. an instance of a builtin class that isn't
         #        supported by another of the obfuscator's methods
         #     2. an instance of a non-builtin class
@@ -273,13 +274,14 @@ class Obfuscator:
         # course we could just use the string in the object repr pair,
         # but something might change that'll make it easier to do stuff
         # when we use `.porpv()`.
+        is_porpvd = False
         res = self.porpv(None)[0]
         type_v = type(v)
-        if type_v in (int, float):
+        if is_num_or_str := type_v in (int, float):
             res = self._uc(v, self.on(v))
-        elif type_v is str:
+        elif is_num_or_str := type_v is str:
             res = self._uc(v, self.gs(v))
-        elif hasattr(v, "__hash__") and v.__hash__ and v in self.object_repr_pair:
+        elif is_porpvd := hasattr(v, "__hash__") and v.__hash__ and v in self.object_repr_pair:
             res = self._uc(v, self.porpv(v)[0])
         elif v in __builtins__.__dict__.values():
             res = self._uc(v, (
@@ -310,10 +312,18 @@ class Obfuscator:
                 self.ge(tuple(v.items()))
             ))
         if self.no_walrus:
-            return self._uc(v, res)
+            return res
         else:
             name = name or self.nn()
-            return self._uc(v, f"({name}:={res})")
+            if is_num_or_str:
+                if ':=' in res:
+                    _name, res = res[1:-1].split(':=', 1)
+                    self.taken.remove(_name)
+                self.cache[v] = name
+            elif is_porpvd:
+                self.object_repr_pair[v] = name
+            self._uc(v, name)
+            return f"({name}:={res})"
     
     def on(self, x, name_=None):
         """.on(x, name_=None): obfuscate number
@@ -327,7 +337,8 @@ class Obfuscator:
             return self.porpv(x, d=values)[0]
         name = None if self.no_walrus else (name_ or self.nn())
         if type(x) is float:
-            res = f"{self.ge(float)}({self.gs(str(x))})"
+            numer, denom = Fraction(str(x)).as_integer_ratio()
+            res = f"{self.on(numer, name)}.__truediv__({self.on(denom, name)})"
         elif type(x) is int:
             if x < 0:
                 res = self.on(inv := ~x)
@@ -357,17 +368,18 @@ class Obfuscator:
             else:
                 res = f"""{reduce("{}.__add__({})".format,
                               [f"__name__.__getitem__({self.on(0)})"]*x
-                                  if self.no_walrus else
-                                  [f"({name}:=__name__.__getitem__({self.on(0)}))"]
-                                  +[name]*(x-1))}.__len__()"""
+                              if self.no_walrus else
+                              [f"({name}:=__name__.__getitem__({self.on(0)}))"]
+                              +[name]*(x-1))}.__len__()"""
         else:
             raise TypeError((
-                 "Obfuscator.on expects an argument of type float or int, "
-                f"argument of type {type(x)} was found"
+                 "Obfuscator.on() argument must be a real number, "
+                f"not '{type(x).__name__:200s}'"
             ))
         if self.no_walrus:
+            values[x] = res
             return res
-        values[x] = resname = name
+        values[x] = resname = self.nn() if name_ else name
         return f"({resname}:={res})"
     
     def gdci(self, c, name_=None):
@@ -376,12 +388,12 @@ class Obfuscator:
         (obfuscated representation of `chr()`, obfuscated character ordinal,
          False)."""
         if type(c) is not str:
-            raise TypeError("Obfuscator.gdci expects argument of type str, " + \
-                f"argument of type {type(c)} was found"
+            raise TypeError("Obfuscator.gdci() expected string of length 1, "
+                f"'{type(c).__name__:200s}' object found"
             )
         if len(c) != 1:
-            raise ValueError("Obfuscator.gdci expects str of len 1, " + \
-                "str of len {len(c)} was found"
+            raise ValueError("Obfuscator.gdci() expected a character, "
+                f"but string of length {len(c)} found"
             )
         d = {}
         if self.no_walrus:
@@ -443,8 +455,8 @@ class Obfuscator:
         """.gs(s): get string
         Gets the obfuscated representation of string `s`."""
         if type(s) is not str:
-            raise TypeError("Obfuscator.gs expects argument of type str, " + \
-                f"argument of type {type(c)} was found"
+            raise TypeError("Obfuscator.gs() argument must be a string, "
+                f"not '{type(c).__name__:200s}' object"
             )
         values = self.cache
         if s in values:
