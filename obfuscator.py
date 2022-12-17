@@ -258,138 +258,116 @@ class Obfuscator:
         Returns an obfuscated string that, when evaluated, is equivalent to `v`.
         Upon error, return -1. Upon not finding a suitable logic for `v`,
         return `None` obfuscated."""
-        try:
+        if v in self.ge_cache:
             return self.ge_cache[v]
-        except ValueError:
-            pass
-        if not self.no_walrus:
-            name = name or self.nn()
-            self._uc(v, name)
-            if type(v) is int:
-                res = self.on(v, name)
-                if ':=' in res:
-                    _name, res = res[1:-1].split(':=',1)
-                    self.taken.remove(_name)
-                self.cache[v] = name
-                return f"({name}:={res})"
-            if (type_v := type(v)) is str:
-                return self.gs(v, name)
-            if hasattr(v, "__hash__") and v.__hash__ and v in self.object_repr_pair:
-                return self.porpv(v, name)[0]
-            if v in __builtins__.__dict__.values():
-                return "({}:=__builtins__.__getattribute__({}))".format(
-                    name,
-                    self.gs(gifi(__builtins__.__dict__, v))
-                )
-            if (type_v is type or type in type_v.__bases__) and type_v.__new__ is type.__new__:
-                return "({}:={}({},{},{}))".format(
-                    name,
-                    self.ge(type_v),
-                    self.gs(v.__name__),
-                    self.ge(v.__bases__),
-                    self.ge(dict(v.__dict__))
-                )
-            if type_v is tuple:
-                return (
-                    "({}:=__loader__.__bases__.__class__()"
-                    f"{'.__add__(({},))' * len(v)})"
-                ).format(*map(self.ge, v))
-            if type_v is dict:
-                return "({}:=__annotations__.__class__({}))".format(
-                    name,
-                    self.ge(tuple(v.items()))
-                )
-            return self.porpv(None, name)[0]
-        else:
-            if type(v) is int:
-                return self._uc(v, self.on(v))
-            if (type_v := type(v)) is str:
-                return self._uc(v, self.gs(v))
-            if hasattr(v, "__hash__") and v.__hash__ and v in self.object_repr_pair:
-                return self._uc(v, self.porpv(v)[0])
-            if v in __builtins__.__dict__.values():
-                return self._uc(v, "__builtins__.__getattribute__({})".format(
-                    self.gs(gifi(__builtins__.__dict__, v))
-                ))
-            if (type_v is type or type in type_v.__bases__) and type_v.__new__ is type.__new__:
+        # Default to `None` obfuscated.
+        # If res is unchanged, that means that v is one of the following
+        #     1. an instance of a builtin class that isn't
+        #        supported by another of the obfuscator's methods
+        #     2. an instance of a non-builtin class
+        #     3. a (user-defined) function
+        #     4. a generator
+        # in that case, return `None` obfuscated.
+        
+        # For anyone questioning why use `.porpv()` for `None`, well of
+        # course we could just use the string in the object repr pair,
+        # but something might change that'll make it easier to do stuff
+        # when we use `.porpv()`.
+        res = self.porpv(None)[0]
+        type_v = type(v)
+        if type_v in (int, float):
+            res = self._uc(v, self.on(v))
+        elif type_v is str:
+            res = self._uc(v, self.gs(v))
+        elif hasattr(v, "__hash__") and v.__hash__ and v in self.object_repr_pair:
+            res = self._uc(v, self.porpv(v)[0])
+        elif v in __builtins__.__dict__.values():
+            res = self._uc(v, (
+                    "__builtins__.__getattribute__("
+                    "__builtins__.__dir__().__getitem__({}))"
+                ).format(
+                self.on(__builtins__.__dir__().index(gifi(__builtins__.__dict__, v)))
+            ))
+        elif v in object.__subclasses__():
+            res = self._uc(v, "{}.__subclasses__().__getitem__()".format(
+                self.ge(object),
+                self.on(object.__subclasses__().index(v)),
+            ))
+        elif (type_v is type or type in type_v.__bases__) and type_v.__new__ is type.__new__:
                 return self._uc(v, "{}({},{},{})".format(
                     self.ge(type_v),
                     self.gs(v.__name__),
                     self.ge(v.__bases__),
                     self.ge(dict(v.__dict__))
                 ))
-            if type_v is tuple:
-                return self._uc(v, (
-                    "__loader__.__bases__.__class__()"
-                    f"{'.__add__(({},))' * len(v)}"
-                ).format(*map(self.ge, v)))
-            if type_v is dict:
-                return self._uc(v, "__annotations__.__class__({})".format(
-                    self.ge(tuple(v.items()))
-                ))
-            return self._uc(v, self.porpv(None)[0])
-        # If all paths above didn't work, `v` is one of the following:
-        #     1. an instance of a builtin class that isn't
-        #        supported by another of the obfuscators methods
-        #     2. an instance of a non-builtin class
-        #     3. a (user-defined) function
-        #     4. a generator
-        # in that case, return `None` obfuscated.
-        
-        # For anyone questoning why use `.porpv()` for `None`, well of
-        # course we could just use the string in the object repr pair,
-        # but something might change that'll make it easier to do stuff
-        # when we use `.porpv()`.
+        elif type_v is tuple:
+            res = self._uc(v, (
+                "__loader__.__bases__.__class__()"
+                f"{'.__add__(({},))' * len(v)}"
+            ).format(*map(self.ge, v)))
+        elif type_v is dict:
+            res = self._uc(v, "__annotations__.__class__({})".format(
+                self.ge(tuple(v.items()))
+            ))
+        if self.no_walrus:
+            return self._uc(v, res)
+        else:
+            name = name or self.nn()
+            return self._uc(v, f"({name}:={res})")
     
     def on(self, x, name_=None):
         """.on(x, name_=None): obfuscate number
         Obfuscate a number. `name_` is the temporary name used for temporary
         value assignments."""
         values = self.cache
-        if x < 0:
-            res = self.on(inv := ~x)
-            values[x] = f"{values[inv]}.__invert__()"
-            return f"{res}.__invert__()"
         if x in values:
             val = values[x]
             if type(val) is str:
                 return val
             return self.porpv(x, d=values)[0]
-        if not self.no_walrus:
-            name = name_ or self.nn()
-        else:
-            name = None
-        if x not in {2, 3}:
-            # TODO: better stuff
-            p = gpf(x)
-            add = 0
-            orig_x = x
-            while x > 3 and p == x:
-                x -= (t := x // 3)
+        name = None if self.no_walrus else (name_ or self.nn())
+        if type(x) is float:
+            res = f"{self.ge(float)}({self.gs(str(x))})"
+        elif type(x) is int:
+            if x < 0:
+                res = self.on(inv := ~x)
+                values[x] = f"{values[inv]}.__invert__()"
+                return f"{res}.__invert__()"
+            if x not in {2, 3}:
+                # TODO: better stuff
                 p = gpf(x)
-                add += t
-            q = x // p
-            method = "mul"
-            if q > 4 and (qb := log2(q)).is_integer():
-                qb = trunc(qb)
-                if p > 4 and (pb := log2(p)).is_integer() and pb < qb:
-                    pb, qb = qb, trunc(pb) + 1
-                q = qb
-                method = "lshift"
-            res = f"{self.on(p, name)}.__{method}__({self.on(q, name)})" \
-                  f"""{'.__invert__().__neg__()' if add == 1 else
-                     f'.__add__({self.on(add, name)})' if add else ''}"""
-            x = orig_x # for setting to `values[x]` later
-        else:
-            res = f"""{reduce("{}.__add__({})".format,
+                add = 0
+                orig_x = x
+                while x > 3 and p == x:
+                    x -= (t := x // 3)
+                    p = gpf(x)
+                    add += t
+                q = x // p
+                method = "mul"
+                if q > 4 and (qb := log2(q)).is_integer():
+                    qb = trunc(qb)
+                    if p > 4 and (pb := log2(p)).is_integer() and pb < qb:
+                        pb, qb = qb, trunc(pb) + 1
+                    q = qb
+                    method = "lshift"
+                res = f"{self.on(p, name)}.__{method}__({self.on(q, name)})" \
+                      f"""{'.__invert__().__neg__()' if add == 1 else
+                         f'.__add__({self.on(add, name)})' if add else ''}"""
+                x = orig_x # for setting to values[x] later
+            else:
+                res = f"""{reduce("{}.__add__({})".format,
                               [f"__name__.__getitem__({self.on(0)})"]*x
-                              if self.no_walrus else
-                              [f"({name}:=__name__.__getitem__({self.on(0)}))"]
-                              +[name]*(x-1))}.__len__()"""
+                                  if self.no_walrus else
+                                  [f"({name}:=__name__.__getitem__({self.on(0)}))"]
+                                  +[name]*(x-1))}.__len__()"""
+        else:
+            raise TypeError((
+                 "Obfuscator.on expects an argument of type float or int, "
+                f"argument of type {type(x)} was found"
+            ))
         if self.no_walrus:
-            values[x] = res
             return res
-        values[x] = resname = self.nn() if name_ else name
+        values[x] = resname = name
         return f"({resname}:={res})"
     
     def gdci(self, c, name_=None):
@@ -397,6 +375,14 @@ class Obfuscator:
         Returns (obfuscated representation of character `c`, index, True) or
         (obfuscated representation of `chr()`, obfuscated character ordinal,
          False)."""
+        if type(c) is not str:
+            raise TypeError("Obfuscator.gdci expects argument of type str, " + \
+                f"argument of type {type(c)} was found"
+            )
+        if len(c) != 1:
+            raise ValueError("Obfuscator.gdci expects str of len 1, " + \
+                "str of len {len(c)} was found"
+            )
         d = {}
         if self.no_walrus:
             for x, rep in self.object_repr_pair.items():
@@ -456,6 +442,10 @@ class Obfuscator:
     def gs(self, s, name=None):
         """.gs(s): get string
         Gets the obfuscated representation of string `s`."""
+        if type(s) is not str:
+            raise TypeError("Obfuscator.gs expects argument of type str, " + \
+                f"argument of type {type(c)} was found"
+            )
         values = self.cache
         if s in values:
             return values[s]
