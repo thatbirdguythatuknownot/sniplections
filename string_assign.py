@@ -3,7 +3,7 @@
 # inspiration and curiosity.
 
 from ctypes import memset
-from sys import getsizeof
+from sys import byteorder, getsizeof
 
 def kind(string):
      kind = 1
@@ -41,14 +41,18 @@ def s_assign_2byte(string, otherstring, start=0, end=None):
     elif end < 0:
         end += len_string
         assert end >= 0, "end index out of bounds"
-    ref = id(string)+getsizeof(string)-(len(string)+start-1)*2
+    ref = id(string)+str.__basicsize__-(len(string)-start+1)*2
     if (end := end - start) <= 0: return ref
     for i, x in enumerate(otherstring):
         if i == end: break
         setat = ref+2*i
         ord_x = ord(x)
-        memset(setat, (o := ord_x >> 8), 2)
-        memset(setat, ord_x ^ (o << 8), 1)
+        if byteorder == 'little':
+           memset(setat, ord_x >> 8, 2)
+           memset(setat, ord_x & 0xff, 1)
+        else:
+           memset(setat, ord_x & 0xff, 2)
+           memset(setat, ord_x >> 8, 1)
     return ref
 
 def s_assign_4byte(string, otherstring, start=0, end=None):
@@ -61,15 +65,21 @@ def s_assign_4byte(string, otherstring, start=0, end=None):
     elif end < 0:
         end += len_string
         assert end >= 0, "end index out of bounds"
-    ref = id(string)+getsizeof(string)-(len(string)+start-1)*4
+    ref = id(string)+getsizeof(string)-(len(string)-start+1)*4
     if (end := end - start) <= 0: return ref
     for i, x in enumerate(otherstring):
         if i == end: break
         setat = ref+4*i
         ord_x = ord(x)
-        memset(setat, ord_x >> 16, 3)
-        memset(setat, (ord_x & 0xffff) >> 8, 2)
-        memset(setat, ord_x & 0xff, 1)
+        if byteorder == 'little':
+            memset(setat, ord_x >> 16, 3)
+            memset(setat, ord_x >> 8 & 0xff, 2)
+            memset(setat, ord_x & 0xff, 1)
+        else:
+            setat += 1
+            memset(setat, ord_x & 0xff, 3)
+            memset(setat, ord_x >> 8 & 0xff, 2)
+            memset(setat, ord_x >> 16, 1)
     return ref
 
 def s_assign(string, otherstring, start=0, end=None):
@@ -91,3 +101,6 @@ def s_assign(string, otherstring, start=0, end=None):
         else:
             return s_assign_4byte(string, otherstring, start, end)
     raise TypeError("argument 1 kind has a lesser kind than argument 2")
+
+a = "\U0010ffffhuh";b="a\U0010ffffbc"
+s_assign(a, b)
