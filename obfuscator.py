@@ -151,7 +151,7 @@ class Obfuscator:
               ((__builtins__.__dir__, "oct"),), (), ()),
         re: ("({0}:={1}({2}))", (__import__,), ("re",), ()),
         __import__: ("({0}:=__builtins__.__getattribute__({1}))", (), ("__import__",), ()),
-        setattr: ("({0}:=__loader__.__setattr__)", (), (), ()),
+        setattr: "__loader__.__setattr__",
         slice: ("({0}:=__builtins__.__getattribute__({1}))", (), ("slice",), ()),
         globals: ("({0}:=__builtins__.__dict__.__getitem__({1}))", (), ("globals",), ()),
         chr: ("({0}:=__builtins__.__dict__.__getitem__({1}))", (), ("chr",), ()),
