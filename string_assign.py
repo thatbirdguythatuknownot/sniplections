@@ -41,7 +41,7 @@ def s_assign_2byte(string, otherstring, start=0, end=None):
     elif end < 0:
         end += len_string
         assert end >= 0, "end index out of bounds"
-    ref = id(string)+str.__basicsize__-(len(string)-start+1)*2
+    ref = id(string)+getsizeof(string)-(len(string)-start+1)*2
     if (end := end - start) <= 0: return ref
     for i, x in enumerate(otherstring):
         if i == end: break
@@ -101,6 +101,3 @@ def s_assign(string, otherstring, start=0, end=None):
         else:
             return s_assign_4byte(string, otherstring, start, end)
     raise TypeError("argument 1 kind has a lesser kind than argument 2")
-
-a = "\U0010ffffhuh";b="a\U0010ffffbc"
-s_assign(a, b)
