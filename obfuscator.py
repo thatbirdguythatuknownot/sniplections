@@ -58,8 +58,6 @@ version = version_info.major + version_info.minor / 100
 if version < 3.11:
     print("\nThis obfuscator was primarily written for Python3.11, and some things may not work correctly in earlier versions.\n")
     warn(FutureWarning("use 3.11 or stuff might not work"))
-elif version > 3.11:
-    print("\nThis obfuscator was primarily written for Python3.11, and some things may not work correctly in later versions.\n")
 
 def gbni(b): # get builtin name index
     return __builtins__.__dir__().index(b)
@@ -333,8 +331,7 @@ class Obfuscator:
             res = "__annotations__.__class__({})".format(
                 self.ge(tuple(v.items()))
             )
-        elif (getattribute(type_v, "__eq__") is object.__eq__ and \
-              getattribute(type_v, "__repr__") is object.__repr__):
+        else:
             try:
                 if eval(repr(v)) == v:
                     res = "{}({})".format(
