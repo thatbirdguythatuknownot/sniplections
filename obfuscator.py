@@ -3,7 +3,7 @@ Rules for the obfuscator:
     Allowed operators/symbols:
         .                   - attribute access
         ,                   - comma
-        (...)               - call (... stands for the arguments)
+        (...)               - call (... stands for the arguments, if any)
         :=                  - walrus operator/assignment expression
                               can be disabled by passing `taken=False` to
                               the obfuscator
@@ -44,6 +44,8 @@ Rules for the obfuscator:
 
 # ensure that __builtins__ is always a module instead of a dict
 import builtins as __builtins__
+from sys import version_info
+from warnings import warn
 import importlib, re
 from ast import *
 from ast import _Precedence, _Unparser
@@ -52,14 +54,17 @@ from builtins import *
 from functools import cache, reduce
 from math import log2, trunc
 
-"""
+version = version_info.major + version_info.minor / 100
+if version < 3.11:
+    print("\nThis obfuscator was primarily written for Python3.11, and some things may not work correctly in earlier versions.\n")
+    warn(FutureWarning("use 3.11 or stuff might not work"))
+
 def gbni(b): # get builtin name index
     return __builtins__.__dir__().index(b)
-
+"""
 def gosi(b): # get object subclass index
     return object.__subclasses__().index(b)
 """
-
 def gifi(it, b): # get index from iterable
     if isinstance(it, dict):
         return next((k for k, v in it.items() if v == b), -1)
@@ -96,7 +101,7 @@ def gpf(x): # greatest . factor
     return next((i for i in range(trunc(x**.5 + 1), 1, -1) if not x % i), x)
 
 class no_hash_dict:
-    def __init__(self, **kwargs):
+    def __init__(self, kwargs):
         self.keys = list(kwargs)
         self.vals = list(kwargs.values())
     def __contains__(self, val):
@@ -110,7 +115,7 @@ class no_hash_dict:
             self.keys.append(key)
             self.vals.append(val)
     def __repr__(self):
-        return f"no_hash_dict keys={self.keys!r} vals={self.vals!r}"
+        return f"<no_hash_dict{{\n    keys={self.keys!r},\n    vals={self.vals!r}}}>"
 
 class Obfuscator:
     """Obfuscator(taken=None)
@@ -137,7 +142,7 @@ class Obfuscator:
         dict: "__annotations__.__class__",
         True: "__name__.__eq__(__name__)",
         False: "__name__.__ne__(__name__)",
-        None: "__name__.__getstate__()",
+        None: "__name__.__getstate__()" if version >= 3.11 else ("({0}:=__name__.__class__.__base__.__base__)", (), (), ()),
         object: ("({0}:=__name__.__class__.__base__)", (), (), ()),
         complex: ("({0}:=({0}:=__name__.__ne__(__name__).__invert__()).__neg__().__truediv__({0}.__add__({0}).__neg__()).__rpow__({0}).__class__)",
                   (), (), ()),
@@ -146,15 +151,14 @@ class Obfuscator:
               ((__builtins__.__dir__, "oct"),), (), ()),
         re: ("({0}:={1}({2}))", (__import__,), ("re",), ()),
         __import__: ("({0}:=__builtins__.__getattribute__({1}))", (), ("__import__",), ()),
-        setattr: ("({0}:=__builtins__.__dict__.__getitem__(__builtins__.__dir__().__getitem__({1})))",
-                  ((__builtins__.__dir__, "setattr"),), (), ()),
+        setattr: ("({0}:=__loader__.__setattr__)", (), (), ()),
         slice: ("({0}:=__builtins__.__getattribute__({1}))", (), ("slice",), ()),
         globals: ("({0}:=__builtins__.__dict__.__getitem__({1}))", (), ("globals",), ()),
         chr: ("({0}:=__builtins__.__dict__.__getitem__({1}))", (), ("chr",), ()),
     }
     _default_cache_W = {
         "": "__name__.__class__()",
-        0: "__name__.__class__().__len__()",
+        0: ("({0}:=__name__.__class__().__len__())", (), (), ()),
         1: ("({0}:=__name__.__eq__(__name__).__pos__())", (), (), ()),
     }
     _default_object_repr_pair = {
@@ -162,9 +166,11 @@ class Obfuscator:
         str: "__name__.__class__",
         type: "__loader__.__class__",
         dict: "__annotations__.__class__",
+        list: "__loader__.__subclasses__().__class__",
+        tuple: "__loader__.__bases__.__class__",
         True: "__name__.__eq__(__name__)",
         False: "__name__.__ne__(__name__)",
-        None: "__name__.__getstate__()",
+        None: "__name__.__getstate__()" if version >= 3.11 else "__name__.__class__.__base__.__base__",
         object: "__name__.__class__.__base__",
         complex: "__name__.__eq__(__name__).__truediv__(__name__.__eq__(__name__).__add__(__name__.__eq__(__name__))).__rpow__(__name__.__ne__(__name__).__invert__()).__class__",
         open: ("__builtins__.__dict__.__getitem__({1})", (), ("open",), ()),
@@ -172,8 +178,7 @@ class Obfuscator:
               ((__builtins__.__dir__, "oct"),), (), ()),
         re: ("{1}({2})", (__import__,), ("re",), ()),
         __import__: ("__builtins__.__getattribute__({1})", (), ("__import__",), ()),
-        setattr: ("__builtins__.__dict__.__getitem__(__builtins__.__dir__().__getitem__({1}))",
-                  ((__builtins__.__dir__, "setattr"),), (), ()),
+        setattr: "__loader__.__setattr__",
         slice: ("__builtins__.__getattribute__({1})", (), ("slice",), ()),
         globals: ("__builtins__.__dict__.__getitem__({1})", (), ("globals",), ()),
         chr: ("__builtins__.__dict__.__getitem__({1})", (), ("chr",), ()),
@@ -187,7 +192,6 @@ class Obfuscator:
     def __init__(self, taken=None):
         self.forbidden_chars = set()
         self.no_walrus = taken is False
-        self.ge_cache = no_hash_dict()
         if self.no_walrus:
             self.object_repr_pair = self._default_object_repr_pair.copy()
             self.cache = self._default_cache.copy()
@@ -198,6 +202,7 @@ class Obfuscator:
             self.object_repr_pair = self._default_object_repr_pair_W.copy()
             self.cache = self._default_cache_W.copy()
             self._nonassigned = self._default_nonassigned.copy()
+        self.ge_cache = no_hash_dict(self._default_object_repr_pair)
     
     def _uc(self, v, val): # update [get expression] cache
         self.ge_cache[v] = val
@@ -260,7 +265,10 @@ class Obfuscator:
         Upon error, return -1. Upon not finding a suitable logic for `v`,
         return `None` obfuscated."""
         if v in self.ge_cache:
-            return self.ge_cache[v]
+            try:
+                return self.porpv(v)[0]
+            except:
+                return self.ge_cache[v]
         # Default to `None` obfuscated.
         # If `res` is unchanged, that means that `v` is one of the following:
         #     1. an instance of a builtin class that isn't
@@ -277,40 +285,60 @@ class Obfuscator:
         is_porpvd = False
         res = self.porpv(None)[0]
         type_v = type(v)
-        if is_num_or_str := type_v in (int, float):
+        getattribute = object.__getattribute__
+        if type_v is type(__builtins__):
+            if v is __builtins__:
+                res = "__builtins__"
+            else:
+                res = "{}({})".format(
+                    self.ge(__import__),
+                    self.gs(v.__name__)
+                )
+        elif is_num_or_str := type_v in (int, float):
             res = self.on(v)
         elif is_num_or_str := type_v is str:
             res = self.gs(v)
         elif is_porpvd := hasattr(v, "__hash__") and v.__hash__ and v in self.object_repr_pair:
-            res = self._uc(v, self.porpv(v)[0])
+            res = self.porpv(v)[0]
         elif v in __builtins__.__dict__.values():
             res = (
                 "__builtins__.__getattribute__("
                 "__builtins__.__dir__().__getitem__({}))"
             ).format(
-                self.on(__builtins__.__dir__().index(gifi(__builtins__.__dict__, v)))
+                self.on(gbni(gifi(__builtins__.__dict__, v)))
             )
-        elif v in object.__subclasses__():
-            res = "{}.__subclasses__().__getitem__()".format(
-                self.ge(object),
-                self.on(object.__subclasses__().index(v)),
+        elif (type_v is type or type in type_v.__bases__) and \
+              getattribute(type_v, "__new__") is type.__new__:
+            res = "{}({},{},{})".format(
+                self.ge(type_v),
+                self.gs(v.__name__),
+                self.ge(v.__bases__),
+                self.ge(dict(v.__dict__))
             )
-        elif (type_v is type or type in type_v.__bases__) and type_v.__new__ is type.__new__:
-                res = "{}({},{},{})".format(
-                    self.ge(type_v),
-                    self.gs(v.__name__),
-                    self.ge(v.__bases__),
-                    self.ge(dict(v.__dict__))
-                )
         elif type_v is tuple:
             res = (
-                "__loader__.__bases__.__class__()"
+                "{}()".format(self.ge(tuple)) + \
                 f"{'.__add__(({},))' * len(v)}"
             ).format(*map(self.ge, v))
+        elif type_v in (list, set):
+            # there's probably a better way to do this
+            res = "{}({})".format(
+                self.ge(type_v),
+                self.ge(tuple(v)),
+            )
         elif type_v is dict:
             res = "__annotations__.__class__({})".format(
                 self.ge(tuple(v.items()))
             )
+        else:
+            try:
+                if eval(repr(v)) == v:
+                    res = "{}({})".format(
+                        self.ge(eval),
+                        self.gs(repr(v))
+                    )
+            except:
+                pass
         if self.no_walrus:
             return self._uc(v, res)
         else:
