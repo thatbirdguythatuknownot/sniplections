@@ -61,6 +61,7 @@ if version < 3.11:
 
 def gbni(b): # get builtin name index
     return __builtins__.__dir__().index(b)
+
 """
 def gosi(b): # get object subclass index
     return object.__subclasses__().index(b)
@@ -101,7 +102,7 @@ def gpf(x): # greatest . factor
     return next((i for i in range(trunc(x**.5 + 1), 1, -1) if not x % i), x)
 
 class no_hash_dict:
-    def __init__(self, kwargs):
+    def __init__(self, kwargs={}):
         self.keys = list(kwargs)
         self.vals = list(kwargs.values())
     def __contains__(self, val):
@@ -202,7 +203,7 @@ class Obfuscator:
             self.object_repr_pair = self._default_object_repr_pair_W.copy()
             self.cache = self._default_cache_W.copy()
             self._nonassigned = self._default_nonassigned.copy()
-        self.ge_cache = no_hash_dict(self._default_object_repr_pair)
+        self.ge_cache = no_hash_dict(self.object_repr_pair)
     
     def _uc(self, v, val): # update [get expression] cache
         self.ge_cache[v] = val
@@ -510,7 +511,6 @@ class Obfuscator:
         """.c(): clear
         Clears/resets obfuscator caches."""
         self.forbidden_chars = set()
-        self.ge_cache = no_hash_dict()
         if self.no_walrus:
             self.object_repr_pair = self._default_object_repr_pair.copy()
             self.cache = self._default_cache.copy()
@@ -519,6 +519,7 @@ class Obfuscator:
             self.object_repr_pair = self._default_object_repr_pair_W.copy()
             self.cache = self._default_cache_W.copy()
             self._nonassigned = self._default_nonassigned.copy()
+        self.ge_cache = no_hash_dict(self.object_repr_pair)
 
 builtins_dict = __builtins__.__dict__
 
