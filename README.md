@@ -188,3 +188,6 @@ A VM made in Python to display text generated with pseudo-assembly instructions 
 python vm.py <columns> "<symbols>" <lines>
 <input from stdin>
 ```
+
+**pysuper.py**<br/>
+A thing (`pysuper.Super`) that replicates built-in `super()`. Python 3.11 only.
