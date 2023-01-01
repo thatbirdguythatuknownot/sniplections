@@ -139,11 +139,14 @@ class Obfuscator:
     _default_object_repr_pair_W = {
         int: "__name__.__len__().__class__",
         str: "__name__.__class__",
-        type: "__loader__.__class__",
+        type: "__name__.__class__.__class__",
         dict: "__annotations__.__class__",
         True: "__name__.__eq__(__name__)",
         False: "__name__.__ne__(__name__)",
         None: "__name__.__getstate__()" if version >= 3.11 else ("({0}:=__name__.__class__.__base__.__base__)", (), (), ()),
+        setattr: "__loader__.__setattr__",
+        list: ("({0}:=__name__.__dir__().__class__)", (), (), ()),
+        tuple: ("({0}:=__name__.__class__.__bases__.__class__)", (), (), ()),
         object: ("({0}:=__name__.__class__.__base__)", (), (), ()),
         complex: ("({0}:=({0}:=__name__.__ne__(__name__).__invert__()).__neg__().__truediv__({0}.__add__({0}).__neg__()).__rpow__({0}).__class__)",
                   (), (), ()),
@@ -152,7 +155,6 @@ class Obfuscator:
               ((__builtins__.__dir__, "oct"),), (), ()),
         re: ("({0}:={1}({2}))", (__import__,), ("re",), ()),
         __import__: ("({0}:=__builtins__.__getattribute__({1}))", (), ("__import__",), ()),
-        setattr: "__loader__.__setattr__",
         slice: ("({0}:=__builtins__.__getattribute__({1}))", (), ("slice",), ()),
         globals: ("({0}:=__builtins__.__dict__.__getitem__({1}))", (), ("globals",), ()),
         chr: ("({0}:=__builtins__.__dict__.__getitem__({1}))", (), ("chr",), ()),
@@ -165,13 +167,14 @@ class Obfuscator:
     _default_object_repr_pair = {
         int: "__name__.__len__().__class__",
         str: "__name__.__class__",
-        type: "__loader__.__class__",
+        type: "__name__.__class__.__class__",
         dict: "__annotations__.__class__",
-        list: "__loader__.__subclasses__().__class__",
-        tuple: "__loader__.__bases__.__class__",
         True: "__name__.__eq__(__name__)",
         False: "__name__.__ne__(__name__)",
         None: "__name__.__getstate__()" if version >= 3.11 else "__name__.__class__.__base__.__base__",
+        setattr: "__name__.__class__.__setattr__",
+        list: "__name__.__dir__().__class__",
+        tuple: "__name__.__class__.__bases__.__class__",
         object: "__name__.__class__.__base__",
         complex: "__name__.__eq__(__name__).__truediv__(__name__.__eq__(__name__).__add__(__name__.__eq__(__name__))).__rpow__(__name__.__ne__(__name__).__invert__()).__class__",
         open: ("__builtins__.__dict__.__getitem__({1})", (), ("open",), ()),
@@ -179,7 +182,6 @@ class Obfuscator:
               ((__builtins__.__dir__, "oct"),), (), ()),
         re: ("{1}({2})", (__import__,), ("re",), ()),
         __import__: ("__builtins__.__getattribute__({1})", (), ("__import__",), ()),
-        setattr: "__loader__.__setattr__",
         slice: ("__builtins__.__getattribute__({1})", (), ("slice",), ()),
         globals: ("__builtins__.__dict__.__getitem__({1})", (), ("globals",), ()),
         chr: ("__builtins__.__dict__.__getitem__({1})", (), ("chr",), ()),
@@ -189,7 +191,7 @@ class Obfuscator:
         0: "__name__.__len__().__class__()",
         1: "__name__.__eq__(__name__).__pos__()",
     }
-    _default_nonassigned = {object, complex, open, oct, re, __import__, setattr, slice, globals, chr}
+    _default_nonassigned = {list, tuple, object, complex, open, oct, re, __import__, slice, globals, chr}
     def __init__(self, taken=None):
         self.forbidden_chars = set()
         self.no_walrus = taken is False
