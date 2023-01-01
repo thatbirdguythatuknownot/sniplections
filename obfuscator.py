@@ -144,7 +144,7 @@ class Obfuscator:
         True: "__name__.__eq__(__name__)",
         False: "__name__.__ne__(__name__)",
         None: "__name__.__getstate__()" if version >= 3.11 else ("({0}:=__name__.__class__.__base__.__base__)", (), (), ()),
-        setattr: "__loader__.__setattr__",
+        setattr: "__name__.__class__.__base__.__setattr__",
         list: ("({0}:=__name__.__dir__().__class__)", (), (), ()),
         tuple: ("({0}:=__name__.__class__.__bases__.__class__)", (), (), ()),
         object: ("({0}:=__name__.__class__.__base__)", (), (), ()),
