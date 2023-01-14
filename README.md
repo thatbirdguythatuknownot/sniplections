@@ -191,3 +191,16 @@ python vm.py <columns> "<symbols>" <lines>
 
 **pysuper.py**<br/>
 A thing (`pysuper.Super`) that replicates built-in `super()`. Python 3.11 only.
+
+**astgolfer.py**<br/>
+A Python code golfer. To be used like this:
+```py
+import ast
+from astgolfer import RewriteExpression, GolfUnparser
+
+code = "[int(bb) for bb in aokfoasfal]"
+tree = ast.parse(code)
+tree = ast.fix_missing_locations(RewriteExpression(use_map=True).visit(tree))
+
+print(GolfUnparser().visit(tree)) # [*map(int,aokfoasfal)]
+```
