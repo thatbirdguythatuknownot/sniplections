@@ -25,7 +25,6 @@ def expand_cycle(m, n, p):
     return l[:i], l[i:]
 
 def expand(m, n, p, limit=15):
-    # note: may not be faster than previous algo
     p_to_limit = p**limit
     x = m * pow(n, -1, p_to_limit) % p_to_limit
     return [x // p**k % p for k in range(limit)]
