@@ -6,8 +6,9 @@ def expand_cycle(m, n, p):
     rp = range(p)
     finv_p = Fraction(1, p)
     l = []
-    v = [m]
-    while True:
+    v = {m: 0}
+    idx = 0
+    while idx := idx + 1:
         m_p = m%p
         if m_p == 0:
             l.append(0)
@@ -20,8 +21,8 @@ def expand_cycle(m, n, p):
             m = (finv_p * (Fraction(m, n) - z)).numerator
         if m in v:
             break
-        v.append(m)
-    i = v.index(m)
+        v[m] = idx
+    i = v[m]
     return l[:i], l[i:]
 
 def expand(m, n, p, limit=15):
