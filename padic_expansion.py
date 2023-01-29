@@ -45,4 +45,4 @@ def itoo_cycle(arg):
 def itoo(arg):
     p, A, lim = arg.split()
     m, n = A.split('/')
-    return ''.join(alph[x] for x in expand(int(m), int(n), int(p), int(limit))[::-1])
+    return ''.join(alph[x] for x in expand(int(m), int(n), int(p), int(lim))[::-1])
