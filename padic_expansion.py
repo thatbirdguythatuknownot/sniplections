@@ -25,14 +25,10 @@ def expand_cycle(m, n, p):
     return v[:i], v[i:]
 
 def expand(m, n, p, limit=15):
-    l, to_rep = expand_cycle(m, n, p)
-    len_l = len(l)
-    len_torep = len(to_rep)
-    nrep = 0
-    while len_l < limit:
-        len_l += len_torep
-        nrep += 1
-    return (l + to_rep * nrep)[:limit]
+    # note: may not be faster than previous algo
+    p_to_limit = p**limit
+    x = m * pow(n, -1, p_to_limit) % p_to_limit
+    return [x // p**k % p for k in range(limit)]
 
 def itoo_cycle(arg):
     p, A = arg.split()
