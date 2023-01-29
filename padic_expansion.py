@@ -22,7 +22,7 @@ def expand_cycle(m, n, p):
             break
         v.append(m)
     i = v.index(m)
-    return v[:i], v[i:]
+    return l[:i], l[i:]
 
 def expand(m, n, p, limit=15):
     # note: may not be faster than previous algo
