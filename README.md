@@ -204,3 +204,11 @@ tree = ast.fix_missing_locations(RewriteExpression(use_map=True).visit(tree))
 
 print(GolfUnparser().visit(tree)) # [*map(int,aokfoasfal)]
 ```
+
+**padic_expansion.py**<br/>
+Expands rational numbers with a number `p` which satisfies `2 <= p <= 62`. To be used like this:
+```py
+from padic_expansion import itoo # means input-to-output
+
+print(itoo('3 -5/11')) # 110021100211002
+```
