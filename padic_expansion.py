@@ -2,7 +2,7 @@ from fractions import Fraction
 
 alph = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
-def expand(m, n, p):
+def expand_cycle(m, n, p):
     rp = range(p)
     finv_p = Fraction(1, p)
     l = []
@@ -21,16 +21,28 @@ def expand(m, n, p):
         if m in v:
             break
         v.append(m)
-    to_rep = l[v.index(m):]
+    i = v.index(m)
+    return v[:i], v[i:]
+
+def expand(m, n, p, limit=15):
+    l, to_rep = expand_cycle(m, n, p)
     len_l = len(l)
     len_torep = len(to_rep)
     nrep = 0
-    while len_l < 15:
+    while len_l < limit:
         len_l += len_torep
         nrep += 1
-    return (l + to_rep * nrep)[:15]
+    return (l + to_rep * nrep)[:limit]
 
-def itoo(arg):
+def itoo_cycle(arg):
     p, A = arg.split()
     m, n = A.split('/')
-    return ''.join(alph[x] for x in expand(int(m), int(n), int(p))[::-1])
+    unique, torep = expand_cycle(int(m), int(n), int(p))
+    unique.reverse()
+    torep.reverse()
+    return f"({''.join(alph[x] for x in torep)})" + ''.join(alph[x] for x in unique)
+
+def itoo(arg):
+    p, A, lim = arg.split()
+    m, n = A.split('/')
+    return ''.join(alph[x] for x in expand(int(m), int(n), int(p), int(limit))[::-1])
