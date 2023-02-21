@@ -14,7 +14,6 @@ help_message = """HEXDUMP PROGRAM
 Usage:
 hexdump [options] file[.extension]/.extension
 python hexdump [options] file[.extension]/.extension
-
 Options:
 -h, -? = Print this help message
 -f = Choose format:
@@ -25,7 +24,6 @@ Options:
     x = lowercase hex format for numbers (right-aligned, zero-filled for offsets) [DEFAULT]
 -t = how many characters in a dump line/offset number [DEFAULT 16]
 -o = where to place output [DEFAULT stderr]
-
 """
 options = sys.argv[1:]
 if not options:
@@ -122,7 +120,7 @@ except OSError:
 except IndexError:
     sys.exit(has_help)
 
-with open(path, "r") as file:
+with open(path, "rb") as file:
     text = file.read()
     length = len(text)
     position = 0
@@ -130,9 +128,9 @@ with open(path, "r") as file:
     while position < length:
         contents = text[:offset]
         text = text[offset:]
-        hex = ' '.join(format.format(ord(x)) for x in contents).ljust(offset-1+offset*length_ordinal)
+        hex = ' '.join(format.format(x) for x in contents).ljust(offset-1+offset*length_ordinal)
         filtered_contents = ''
-        for character in contents:
+        for character in map(chr, contents):
             try:
                 unicodedata.name(character)
             except ValueError:
