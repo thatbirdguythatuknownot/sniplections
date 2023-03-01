@@ -1,11 +1,11 @@
 def get_min_digits(x, digs="0123456789", n=None):
     base = len(digs)
     if n is None:
-        n = len(x)
+        n = len(x) >> 1
     check = {*map(digs.index, x)}
     l_check = len(check)
     R_l_check_d2_m1_TO_0 = range((l_check >> 1) - 1, -1, -1)
-    assert -1 not in check and l_check >= n
+    assert -1 not in check and l_check >= 2*n
     check_l = sorted(check)
     mfdd = md = float('inf')
     ma = mb = -1
