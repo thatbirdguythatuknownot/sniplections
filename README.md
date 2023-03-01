@@ -217,6 +217,6 @@ print(itoo('3 -5/11')) # 110021100211002
 Get 2 `n`-digit numbers (3rd argument to `.get_min_digits`, defaults to length of first argument floor divided by 2) in a list of digits which have the least difference between them. Example:
 ```py
 from min_diff_digits import get_min_digits
-print(get_min_digits("234678")) # (39, [4, 2, 6], [3, 8, 7])
-print(get_min_digits("1234567890")) # (247, [5, 0, 1, 2, 3], [4, 9, 8, 7, 6])
+print(get_min_digits("234678")) # (39, ['4', '2', '6'], ['3', '8', '7'])
+print(get_min_digits("1234567890")) # (247, ['5', '0', '1', '2', '3'], ['4', '9', '8', '7', '6'])
 ```
