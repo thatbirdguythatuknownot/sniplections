@@ -22,8 +22,8 @@ def get_min_digits(x, digs="0123456789", n=None):
             check_filter -= {b_, a_}
             a_digs.append(a_)
             b_digs.append(b_)
-        a = ''.join(digs[x] for x in a_digs)
-        b = ''.join(digs[x] for x in b_digs)
+        a = [digs[x] for x in a_digs]
+        b = [digs[x] for x in b_digs]
         a_intval = sum(base**x * a_digs[~x] for x in R_l_check_d2_m1_TO_0)
         b_intval = sum(base**x * b_digs[~x] for x in R_l_check_d2_m1_TO_0)
         if (diff := b_intval - a_intval) < md:
