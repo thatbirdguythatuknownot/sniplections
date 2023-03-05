@@ -48,7 +48,7 @@ class Super:
             # i don't know of any better way to get localsplus values here
             firstarg = c_void_p.from_address(fa_addr := c_void_p.from_address(id(cframe) + object.__basicsize__ + SIZE_PTR).value + SIZE_PTR * 8 + sizeof(c_int) * 2).value
             localsplus_names = py_object.from_address(lpn_addr := id(co) + object.__basicsize__ + SIZE_PTR * 4 + sizeof(c_int) * 11 + sizeof(c_short) * 2).value
-            localsplus_kinds = py_object.from_address(lpn_addr + tuple.__itemsize__).value
+            localsplus_kinds = py_object.from_address(lpn_addr + SIZE_PTR).value
             if firstarg is not None:
                 firstarg = py_object.from_address(fa_addr).value
                 if localsplus_kinds[0] & CO_FAST_CELL and cframe.f_lasti >= 0:
