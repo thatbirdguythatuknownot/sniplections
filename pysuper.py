@@ -43,7 +43,7 @@ class Super:
             co = cframe.f_code
             if co.co_argcount == 0:
                 raise RuntimeError("super(): no arguments")
-            len_freevars = len(co.co_Freevars)
+            len_freevars = len(co.co_freevars)
             co_nlocalsplus = co.co_nlocals + len(co.co_cellvars) + len_freevars
             assert co_nlocalsplus > 0, "'assert co_nlocalsplus > 0' failed"
             # i don't know of any better way to get localsplus values here
