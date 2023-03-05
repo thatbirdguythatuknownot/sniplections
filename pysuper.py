@@ -173,13 +173,13 @@ class Super:
         return newobj
     
     @property
-    def __thisclass__(self):
+    def __thisclass__(self: Self) -> type:
         return object_getattr(self, 'type')
     
     @property
-    def __self__(self):
+    def __self__(self: Self) -> T:
         return object_getattr(self, 'obj')
     
     @property
-    def __self_class__(self):
+    def __self_class__(self) -> T | type[T]:
         return object_getattr(self, 'obj_type')
