@@ -43,7 +43,8 @@ class Super:
             co = cframe.f_code
             if co.co_argcount == 0:
                 raise RuntimeError("super(): no arguments")
-            co_nlocalsplus = len(co.co_cellvars) + len(co.co_freevars) + len(co.co_varnames)
+            len_freevars = len(co.co_Freevars)
+            co_nlocalsplus = co.co_nlocals + len(co.co_cellvars) + len_freevars
             assert co_nlocalsplus > 0, "'assert co_nlocalsplus > 0' failed"
             # i don't know of any better way to get localsplus values here
             firstarg = c_void_p.from_address(fa_addr := c_void_p.from_address(id(cframe) + object.__basicsize__ + SIZE_PTR).value + SIZE_PTR * 8 + sizeof(c_int) * 2).value
@@ -62,7 +63,7 @@ class Super:
                 # but we don't really have a reliable way to check that without
                 # using the long ctypes stuff
                 raise RuntimeError("super(): arg[0] deleted")
-            i = co.co_nlocals + len([1 for x in localsplus_kinds if x & CO_FAST_CELL if not x & CO_FAST_LOCAL])
+            i = co_nlocalsplus - len_freevars
             while i < co_nlocalsplus:
                 name = localsplus_names[i]
                 assert isinstance(name, str), "'assert isinstance(name, str)' failed"
