@@ -220,3 +220,6 @@ from min_diff_digits import get_min_digits
 print(get_min_digits("234678")) # (39, ['4', '2', '6'], ['3', '8', '7'])
 print(get_min_digits("1234567890")) # (247, ['5', '0', '1', '2', '3'], ['4', '9', '8', '7', '6'])
 ```
+
+**pybuild_class.py**<br/>
+A thing (`pybuild_class.build_class`) that replicates built-in `__build_class__()`. Python 3.11 only.
