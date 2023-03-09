@@ -1,15 +1,59 @@
 #define PY_SSIZE_T_CLEAN
+#define Py_BUILD_CORE
 #include "Python.h"
 
-#define Py_BUILD_CORE
 #include "internal/pycore_pyerrors.h"
 #include "internal/pycore_pystate.h"
+#include "internal/pycore_long.h"
 #undef Py_BUILD_CORE
+
+/* miscellaneous declarations ***********************************************/
+
+static PyObject *strings1[256];
+static PyObject *uchar_longs[256];
+static PyTypeObject *list_type, *tuple_type, *range_type, *enum_type,
+                    *set_type, *frozenset_type, *dict_type;
+static PyTypeObject *unicode_type, *bytes_type, *bytearray_type;
+static PyTypeObject *long_type;
+
+typedef struct {
+    PyObject_HEAD
+    PyObject *start;
+    PyObject *stop;
+    PyObject *step;
+    PyObject *length;
+} rangeobject;
+
+/* miscellaneous declarations END *******************************************/
 
 /* utilities ****************************************************************/
 
 #define likely(x) __builtin_expect((x), 1)
 #define unlikely(x) __builtin_expect((x), 0)
+
+#define get_index_from_values_order(v, i) ((char *)v)[-3-i]
+#define DK_ENTRIES(dk) (PyDictKeyEntry*)(&((int8_t*)((dk)->dk_indices))[(size_t)1 << (dk)->dk_log2_index_bytes])
+#define DK_UNICODE_ENTRIES(dk) (PyDictUnicodeEntry*)(&((int8_t*)((dk)->dk_indices))[(size_t)1 << (dk)->dk_log2_index_bytes])
+#define DK_IS_UNICODE(dk) ((dk)->dk_kind != DICT_KEYS_GENERAL)
+
+#define unicode_char1(ch) (strings1[ch])
+#define UNICODE_CHAR(bytesize) \
+    PyObject *unicode = PyUnicode_New(1, ch); \
+    if (unlikely(unicode == NULL)) { \
+        return NULL; \
+    } \
+    PyUnicode_ ## bytesize ## BYTE_DATA(unicode)[0] = ch; \
+    return unicode;
+Py_LOCAL_INLINE(PyObject *)
+unicode_char2(Py_UCS2 ch)
+{
+    UNICODE_CHAR(2)
+}
+Py_LOCAL_INLINE(PyObject *)
+unicode_char4(Py_UCS4 ch)
+{
+    UNICODE_CHAR(4)
+}
 
 PyDoc_STRVAR(reduce_doc, "Return state information for pickling.");
 PyDoc_STRVAR(setstate_doc, "Set state information for unpickling.");
@@ -942,7 +986,7 @@ PyDoc_STRVAR(ichunked__doc__,
     If they are read out of order, :func:`itertools.tee` is used to cache\n\
     elements as necessary.\n\
 \n\
-    >>> import itertools \n\
+    >>> import fast_itertools\n\
     >>> all_chunks = fast_itertools.ichunked(count(), 4)\n\
     >>> c_1, c_2, c_3 = next(all_chunks), next(all_chunks), next(all_chunks)\n\
     >>> list(c_2)  # c_1's elements have been cached; c_3's haven't been\n\
@@ -954,13 +998,440 @@ PyDoc_STRVAR(ichunked__doc__,
 
 /* .ichunked() and ichunked object END **************************************/
 
+/* .take() ******************************************************************/
 
+static PyObject *
+fast_itertools_take(PyObject *self,
+                        PyObject *const *args,
+                        Py_ssize_t nargs,
+                        PyObject *kwnames)
+{
+    PyObject *iterable = NULL, *res = NULL, *n_arg, **kwnames_items, **res_items;
+    PyObject *tmp, *diff, *endcalc;
+    PyTypeObject *iterabletype = NULL;
+    PyASCIIObject *kwname;
+    PyBufferProcs *pb;
+    void *kwname_data;
+    int iterable_given = 0, n_given = 0, is_list = 0;
+    int cmp0, cmp1;
+    Py_ssize_t i, j, n, m, kwname_length, nkwargs = 0, largs = nargs;
+    size_t n_temp, size;
+
+    if (kwnames) {
+        largs += (nkwargs = PyTuple_GET_SIZE(kwnames));
+        kwnames_items = ((PyTupleObject *)kwnames)->ob_item;
+    }
+    if (unlikely(largs < 2 || largs > 2)) {
+        PyErr_Format(PyExc_TypeError,
+                     "fast_itertools.take() takes 2 "
+                     "arguments (given %zd)",
+                     largs);
+        goto error;
+    }
+
+    switch (nargs) {
+    case 2:
+        n_given = 1;
+        n_arg = args[1];
+        if (likely(PyLong_Check(n_arg))) {
+            Py_ssize_t long_arg_size = Py_SIZE(n_arg);
+            digit *ob_digit;
+            switch (long_arg_size) {
+            case 0:
+                n = 0;
+                break;
+            case 1:
+                n = ((PyLongObject *)n_arg)->ob_digit[0];
+                break;
+            case 2:
+                ob_digit = ((PyLongObject *)n_arg)->ob_digit;
+                n = ob_digit[0] | (ob_digit[1] << PyLong_SHIFT);
+                break;
+            case 3:
+                ob_digit = ((PyLongObject *)n_arg)->ob_digit;
+                n_temp = (ob_digit[0]
+                          | ((ob_digit[1] | (ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
+                if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX)) {
+                    PyErr_Format(PyExc_OverflowError,
+                                 "'n' argument for fast_itertools.take() must be "
+                                 "None or a positive number <= %zd",
+                                 PY_SSIZE_T_MAX);
+                    goto error;
+                }
+                n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
+                break;
+            default:
+                PyErr_Format(PyExc_OverflowError,
+                             "'n' argument for fast_itertools.take() must be "
+                             "None or a positive number <= %zd",
+                             PY_SSIZE_T_MAX);
+                goto error;
+            }
+        }
+        else if (n_arg == Py_None) {
+            n = PY_SSIZE_T_MAX;
+        }
+        else {
+            PyErr_Format(PyExc_ValueError,
+                         "'n' argument for fast_itertools.take() must be "
+                         "None or an integer (0 <= n <= %zd)",
+                         PY_SSIZE_T_MAX);
+            goto error;
+        }
+    case 1:
+        iterable_given = 1;
+        iterable = args[0];
+        if (unlikely(iterable == NULL)) {
+            goto error;
+        }
+        break;
+    }
+
+    for (i = 0; i < nkwargs; i++) {
+        if (unlikely(
+                (kwname_length = (kwname = (PyASCIIObject *)kwnames_items[i])->length) == 8 &&
+                memcmp((kwname_data = PyUnicode_DATA(kwname)), "iterable", 8) == 0
+            ))
+        {
+            if (unlikely(iterable_given == 1)) {
+                PyErr_SetString(PyExc_TypeError,
+                                "fast_itertools.take() got multiple values "
+                                "for argument 'iterable'");
+                goto error;
+            }
+            iterable = args[nargs + i];
+            if (unlikely(iterable == NULL)) {
+                PyErr_BadArgument();
+                goto error;
+            }
+        }
+        else if (likely(
+                    kwname_length == 1 &&
+                    *((char *)kwname_data) == 'n'
+                 ))
+        {
+            if (unlikely(n_given == 1)) {
+                PyErr_SetString(PyExc_TypeError,
+                                "fast_itertools.take() got multiple values "
+                                "for argument 'n'");
+                goto error;
+            }
+            n_arg = args[nargs + i];
+            if (likely(PyLong_Check(n_arg))) {
+                Py_ssize_t long_arg_size = Py_SIZE(n_arg);
+                digit *ob_digit;
+                switch (long_arg_size) {
+                case 0:
+                    n = 0;
+                    break;
+                case 1:
+                    n = ((PyLongObject *)n_arg)->ob_digit[0];
+                    break;
+                case 2:
+                    ob_digit = ((PyLongObject *)n_arg)->ob_digit;
+                    n = ob_digit[0] | (ob_digit[1] << PyLong_SHIFT);
+                    break;
+                case 3:
+                    ob_digit = ((PyLongObject *)n_arg)->ob_digit;
+                    n_temp = (ob_digit[0]
+                              | ((ob_digit[1] | (ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
+                    if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX)) {
+                        PyErr_Format(PyExc_OverflowError,
+                                     "'n' argument for fast_itertools.take() must be "
+                                     "None or a positive number <= %zd",
+                                     PY_SSIZE_T_MAX);
+                        goto error;
+                    }
+                    n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
+                    break;
+                default:
+                    PyErr_Format(PyExc_OverflowError,
+                                 "'n' argument for fast_itertools.take() must be "
+                                 "None or a positive number <= %zd",
+                                 PY_SSIZE_T_MAX);
+                    goto error;
+                }
+            }
+            else if (n_arg == Py_None) {
+                n = PY_SSIZE_T_MAX;
+            }
+            else {
+                PyErr_Format(PyExc_ValueError,
+                             "'n' argument for fast_itertools.take() must be "
+                             "None or an integer (0 <= n <= %zd)",
+                             PY_SSIZE_T_MAX);
+                goto error;
+            }
+        }
+        else {
+            PyErr_Format(PyExc_TypeError,
+                         "fast_itertools.take() got an unexpected "
+                         "keyword argument '%U'",
+                         kwname);
+            goto error;
+        }
+    }
+    i = j = 0;
+#define RES_INIT(x) \
+    m = (x); \
+    n = Py_MIN(n, m); \
+    res = PyList_New(n); \
+    if (unlikely(res == NULL)) { \
+        goto error; \
+    } \
+    res_items = ((PyListObject *)res)->ob_item;
+    if (likely((is_list = (iterabletype = Py_TYPE(iterable)) == list_type) || iterabletype == tuple_type)) {
+        RES_INIT(Py_SIZE(iterable));
+        PyObject **iterable_items = is_list ? ((PyListObject *)iterable)->ob_item : ((PyTupleObject *)iterable)->ob_item;
+        for (; likely(i < n); ++i) {
+            Py_XINCREF(iterable_items[i]);
+            res_items[i] = iterable_items[i];
+        }
+    }
+    else if (iterabletype == unicode_type) {
+#define CASE_ALGO(bytesize) \
+    case PyUnicode_ ## bytesize ## BYTE_KIND: { \
+        Py_UCS ## bytesize *data = PyUnicode_ ## bytesize ## BYTE_DATA(iterable); \
+        for (; likely(i < n); ++i) { \
+            res_items[i] = unicode_char##bytesize(data[i]); \
+            Py_INCREF(res_items[i]); \
+        } \
+        break; \
+    }
+        RES_INIT(((PyASCIIObject *)iterable)->length);
+        switch (PyUnicode_KIND(iterable)) {
+            CASE_ALGO(1)
+            CASE_ALGO(2)
+            CASE_ALGO(4)
+        }
+#undef CASE_ALGO
+    }
+    else if (iterabletype == bytes_type) {
+        RES_INIT(Py_SIZE(iterable))
+        char *ob_sval = ((PyBytesObject *)iterable)->ob_sval;
+        for (; likely(i < n); ++i) {
+            res_items[i] = uchar_longs[ob_sval[i]];
+            Py_INCREF(res_items[i]);
+        }
+    }
+    else if (iterabletype == bytearray_type) {
+        RES_INIT(Py_SIZE(iterable))
+        if (likely(n != 0)) {
+            char *ob_start = ((PyByteArrayObject *)iterable)->ob_start;
+            for (; likely(i < n); ++i) {
+                res_items[i] = uchar_longs[ob_start[i]];
+                Py_INCREF(res_items[i]);
+            }
+        }
+    }
+    else if (iterabletype == range_type) {
+        PyObject *ostart = ((rangeobject *)iterable)->start;
+        PyObject *ostop = ((rangeobject *)iterable)->stop;
+        PyObject *ostep = ((rangeobject *)iterable)->step;
+        Py_ssize_t lstart, lstop, lstep;
+        int ispos = 1;
+        lstart = PyLong_AsSsize_t(ostart);
+        if (unlikely(lstart == -1 && PyErr_Occurred())) {
+            PyErr_Clear();
+            goto long_range;
+        }
+        lstop = PyLong_AsSsize_t(ostop);
+        if (unlikely(lstop == -1 && PyErr_Occurred())) {
+            PyErr_Clear();
+            goto long_range;
+        }
+        lstep = PyLong_AsSsize_t(ostep);
+        if (unlikely(lstep == -1 && PyErr_Occurred())) {
+            PyErr_Clear();
+            goto long_range;
+        }
+        size = 0;
+        if (likely(lstep > 0 && lstart < lstop)) {
+            size = (size_t)1 + (lstop - (size_t)1 - lstart) / lstep;
+        }
+        else if (lstep < 0 && lstart > lstop) {
+            ispos = 0;
+            size = (size_t)1 + (lstart - (size_t)1 - lstop) / ((size_t)-lstep);
+        }
+        else {
+            return PyList_New(0);
+        }
+        if (unlikely(size > (size_t)PY_SSIZE_T_MAX)) {
+            PyErr_NoMemory();
+            goto error;
+        }
+        RES_INIT(size);
+        for (i = 0; likely(i < n); lstart += lstep, i++) {
+            if (unlikely((res_items[i] = PyLong_FromSsize_t(lstart)) == NULL))
+            {
+                goto error;
+            }
+        }
+        goto finn;
+  long_range:
+        size = 0;
+        cmp0 = PyObject_RichCompareBool(ostep, uchar_longs[0], Py_GT);
+        if (unlikely(cmp0 == -1)) {
+            goto error;
+        }
+        cmp1 = PyObject_RichCompareBool(ostart, ostop, Py_LE);
+        if (unlikely(cmp1 == -1)) {
+            goto error;
+        }
+        if (likely(cmp0 && cmp1)) {
+            tmp = PyLong_Type.tp_as_number->nb_subtract(ostop, ostart);
+            if (unlikely(tmp == NULL)) {
+                goto error;
+            }
+            diff = PyLong_Type.tp_as_number->nb_subtract(tmp, uchar_longs[1]);
+            Py_DECREF(tmp);
+            if (unlikely(diff == NULL)) {
+                goto error;
+            }
+            endcalc = PyLong_Type.tp_as_number->nb_floor_divide(diff, ostep);
+            Py_DECREF(diff);
+            if (unlikely(endcalc == NULL)) {
+                goto error;
+            }
+            size = (size_t)PyLong_AsSsize_t(endcalc);
+            if (unlikely(size == (size_t)-1 && PyErr_Occurred())) {
+                goto error;
+            }
+            else if (unlikely(size == PY_SSIZE_T_MAX)) {
+                PyErr_NoMemory();
+                goto error;
+            }
+            else if (unlikely(size == (size_t)-1)) {
+                return PyList_New(0);
+            }
+        }
+        else {
+            tmp = PyLong_Type.tp_as_number->nb_subtract(ostart, ostop);
+            if (unlikely(tmp == NULL)) {
+                goto error;
+            }
+            diff = PyLong_Type.tp_as_number->nb_subtract(tmp, uchar_longs[1]);
+            Py_DECREF(tmp);
+            if (unlikely(diff == NULL)) {
+                goto error;
+            }
+            tmp = PyLong_Type.tp_as_number->nb_negative(ostep);
+            if (unlikely(tmp == NULL)) {
+                goto error;
+            }
+            endcalc = PyLong_Type.tp_as_number->nb_floor_divide(diff, tmp);
+            Py_DECREF(diff);
+            Py_DECREF(tmp);
+            if (unlikely(endcalc == NULL)) {
+                goto error;
+            }
+            size = (size_t)PyLong_AsSsize_t(endcalc);
+            if (unlikely(size == (size_t)-1 && PyErr_Occurred())) {
+                goto error;
+            }
+            else if (unlikely(size == PY_SSIZE_T_MAX)) {
+                PyErr_NoMemory();
+                goto error;
+            }
+        }
+        RES_INIT(size + 1);
+        binaryfunc func = PyLong_Type.tp_as_number->nb_add;
+        i = 0;
+        while (likely(i < n)) {
+            res_items[i++] = ostart;
+            if (unlikely((ostart = func(ostart, ostep)) == NULL)) {
+                goto error;
+            }
+        }
+    }
+    else if (iterabletype == set_type || iterabletype == frozenset_type) {
+        RES_INIT(((PySetObject *)iterable)->mask);
+        setentry *entry = ((PySetObject *)iterable)->table;
+        PyObject *key;
+        while (likely(j <= n)) {
+            if ((key = entry[j++].key) != NULL && key != _PySet_Dummy) {
+                res_items[i++] = key;
+                Py_INCREF(key);
+            }
+        }
+    }
+    else if (iterabletype == dict_type) {
+        PyDictValues *v = ((PyDictObject *)iterable)->ma_values;
+        PyDictKeysObject *k = ((PyDictObject *)iterable)->ma_keys;
+        if (v) {
+            RES_INIT(((PyDictObject *)iterable)->ma_used);
+            PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(k);
+            while (likely(j < n)) {
+                res_items[i] = entries[get_index_from_values_order(v, j++)].me_key;
+                Py_INCREF(res_items[i++]);
+            }
+        }
+        else {
+#define ITER_ALGO \
+    for (; likely(j < n); ++j) { \
+        if (entry_ptr->me_value != NULL) { \
+            res_items[i] = entry_ptr->me_key; \
+            Py_INCREF(res_items[i++]); \
+        } \
+        ++entry_ptr; \
+    }
+            RES_INIT(k->dk_nentries);
+            if (DK_IS_UNICODE(k)) {
+                PyDictUnicodeEntry *entry_ptr = DK_UNICODE_ENTRIES(k);
+                ITER_ALGO
+            }
+            else {
+                PyDictKeyEntry *entry_ptr = DK_ENTRIES(k);
+                ITER_ALGO
+            }
+#undef ITER_ALGO
+        }
+    }
+    else if (iterabletype == long_type) {
+        RES_INIT(Py_SIZE(iterable));
+        digit *ob_digit = ((PyLongObject *)iterable)->ob_digit;
+        for (; likely(j < n); ++j) {
+            res_items[i] = PyLong_FromUnsignedLong(ob_digit[j]);
+            if (unlikely(res_items[i++] == NULL)) {
+                goto error;
+            }
+        }
+    }
+    else {
+        res = PySequence_List(iterable);
+        if (unlikely(res == NULL)) {
+            goto error;
+        }
+    }
+  finn:
+    return res;
+  error:
+    Py_XDECREF(res);
+    return NULL;
+#undef RES_INIT
+}
+
+PyDoc_STRVAR(take__doc__,
+"take(iterable, n)\n\
+    Return first *n* items of the iterable as a list.\n\
+\n\
+        >>> import fast_itertools\n\
+        >>> fast_itertools.take(range(10), 3)\n\
+        [0, 1, 2]\n\
+\n\
+    If there are fewer than *n* items in the iterable, all of them are\n\
+    returned.\n\
+\n\
+        >>> fast_itertools.take(range(3), 10)\n\
+        [0, 1, 2]\n");
 
 static PyMethodDef fast_itertools_methods[] = {
     {"chunked", (PyCFunction)fast_itertools_chunked, METH_FASTCALL | METH_KEYWORDS,
      chunked__doc__},
     {"ichunked", (PyCFunction)fast_itertools_ichunked, METH_FASTCALL | METH_KEYWORDS,
      ichunked__doc__},
+    {"take", (PyCFunction)fast_itertools_take, METH_FASTCALL | METH_KEYWORDS,
+     take__doc__},
     {NULL}
 };
 
@@ -979,6 +1450,27 @@ static struct PyModuleDef fast_itertoolsmodule = {
 PyMODINIT_FUNC
 PyInit_fast_itertools(void)
 {
+    Py_ssize_t i = 0;
+    for (i = 0; i < 128; ++i) {
+        strings1[i] = (PyObject *)&_Py_SINGLETON(strings).ascii[i];
+    }
+    for (i = 0; i < 128; ++i) {
+        strings1[i + 128] = (PyObject *)&_Py_SINGLETON(strings).latin1[i];
+    }
+    for (i = 0; i < 256; ++i) {
+        uchar_longs[i] = (PyObject *)&_PyLong_SMALL_INTS[_PY_NSMALLNEGINTS + i];
+    }
+    list_type = &PyList_Type;
+    tuple_type = &PyTuple_Type;
+    unicode_type = &PyUnicode_Type;
+    bytes_type = &PyBytes_Type;
+    bytearray_type = &PyByteArray_Type;
+    range_type = &PyRange_Type;
+    enum_type = &PyEnum_Type;
+    set_type = &PySet_Type;
+    frozenset_type = &PyFrozenSet_Type;
+    dict_type = &PyDict_Type;
+    long_type = &PyLong_Type;
     PyObject *m = PyModule_Create(&fast_itertoolsmodule);
     if (unlikely(PyModule_AddType(m, &ichunk_type) < 0)) {
         return NULL;
