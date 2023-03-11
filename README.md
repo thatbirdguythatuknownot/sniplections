@@ -223,3 +223,27 @@ print(get_min_digits("1234567890")) # (247, ['5', '0', '1', '2', '3'], ['4', '9'
 
 **pybuild_class.py**<br/>
 A thing (`pybuild_class.build_class`) that replicates built-in `__build_class__()`. Python 3.11 only.
+
+**get_minutes.py**<br/>
+Gets required minutes (or messages) to reach a certain level or XP using current XP amount (Polaris system, coefficients to cubic function can be provided, by default MEE6 configuration). Example:
+```py
+from get_minutes import init_funcs
+init_funcs() # initialize
+print(get_required_minutes_exp(100, 0)) # amount of minutes/messages required to get level 100 from level 0; provides output in nonsimulated, simulated (cryptographically secure), and simulated (normal pseudorandom)
+```
+Output:
+```
+needed_exp = 1899250.0
+NOTE: have to wait 1m for a message to get exp again
+
+Best case: 52d 18h 10m (75970 messages)
+Worst case: 87d 22h 17m (126617 messages)
+
+average time (nonsimulated, 20 exp / message): 65d 22h 43m (94963 messages)
+
+--A--
+    average time (simulated, cryptographically secure): 65d 22h 49m (94969 messages)
+
+--B--
+    average time (simulated, normal pseudorandom): 65d 22h 38m (94958 messages)
+```
