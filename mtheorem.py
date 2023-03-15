@@ -13,8 +13,6 @@ def choose(size, total):
             for choice in range(leftover + 1)
         ]
     
-    print(possibilities)
-    
     results = [values.append(leftover) or values for leftover, values in possibilities]
     
     return results[::-1]
