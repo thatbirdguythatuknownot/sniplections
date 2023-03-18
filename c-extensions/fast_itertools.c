@@ -1,7 +1,8 @@
 #define PY_SSIZE_T_CLEAN
-#define Py_BUILD_CORE
 #include "Python.h"
+#include "structmember.h"
 
+#define Py_BUILD_CORE
 #include "internal/pycore_pyerrors.h"
 #include "internal/pycore_pystate.h"
 #include "internal/pycore_long.h"
@@ -23,6 +24,18 @@ typedef struct {
     PyObject *step;
     PyObject *length;
 } rangeobject;
+
+typedef struct {
+    PyObject_HEAD
+    Py_ssize_t it_index;
+    PyObject *it_seq;
+} seqiterobject;
+
+typedef struct {
+    Py_ssize_t curidx;
+    Py_ssize_t size;
+    ssizeargfunc func;
+} sized_info;
 
 /* miscellaneous declarations END *******************************************/
 
@@ -53,6 +66,57 @@ Py_LOCAL_INLINE(PyObject *)
 unicode_char4(Py_UCS4 ch)
 {
     UNICODE_CHAR(4)
+}
+
+typedef enum {
+    LF_NONE,
+    LF_SEQ,
+    L_DICT,
+    L_SET,
+    L_SEQITEREMPTY,
+} SIZEDINFO_RET;
+
+Py_LOCAL_INLINE(SIZEDINFO_RET)
+get_sized_info(PyObject *it, sized_info *s)
+{
+    PyTypeObject *it_type = Py_TYPE(it);
+    PySequenceMethods *sq;
+    PyMappingMethods *mp;
+
+    if (likely((sq = it_type->tp_as_sequence) && sq->sq_length)) {
+        if (likely(sq->sq_item != NULL)) {
+            s->size = sq->sq_length(it);
+            s->func = sq->sq_item;
+            return LF_SEQ;
+        }
+        else if (it_type == &PySet_Type || it_type == &PyFrozenSet_Type) {
+            s->size = sq->sq_length(it);
+            s->func = NULL;
+            return L_SET;
+        }
+    }
+    else if ((mp = it_type->tp_as_mapping) && mp->mp_length) {
+        s->size = mp->mp_length(it);
+        s->func = NULL;
+        return L_DICT;
+    }
+    else if (Py_IS_TYPE(it, &PySeqIter_Type)) {
+        if (likely(((seqiterobject *)it)->it_seq != NULL)) {
+            int res = get_sized_info(((seqiterobject *)it)->it_seq, s);
+            if (likely(s->size >= 0)) {
+                s->curidx = ((seqiterobject *)it)->it_index;
+            }
+            return res;
+        }
+        s->size = 0;
+        s->func = NULL;
+        return L_SEQITEREMPTY;
+    }
+    /* the other sized iterators will unfortunately have to go down the
+       lazy iterator path */
+    s->size = -1;
+    s->func = NULL;
+    return LF_NONE;
 }
 
 PyDoc_STRVAR(reduce_doc, "Return state information for pickling.");
@@ -998,6 +1062,392 @@ PyDoc_STRVAR(ichunked__doc__,
 
 /* .ichunked() and ichunked object END **************************************/
 
+/* .chunked_even() and chunked_even object **********************************/
+
+static PyTypeObject chunkedeven_type;
+
+typedef struct _chunkedevenobject {
+    PyObject_HEAD;
+    PyObject *iterable;
+    Py_ssize_t n;
+    Py_ssize_t taken;
+    union {
+        struct {
+            ssizeargfunc func;
+            Py_ssize_t size;
+            Py_ssize_t n_left;
+        } sized;
+        struct {
+            Py_ssize_t bufsize;
+            PyObject **buf;
+            Py_ssize_t headidx;
+            Py_ssize_t tailidx;
+        } lazy;
+    } info;
+    PyObject *(*func)(struct _chunkedevenobject *);
+    SIZEDINFO_RET type;
+    int done;
+} chunkedevenobject;
+
+PyObject *
+chunkedeven_sizedwrapper(chunkedevenobject *o)
+{
+    ssizeargfunc func = o->info.sized.func;
+    PyObject *res, *iterable = o->iterable;
+    PyObject **res_items;
+    Py_ssize_t i;
+
+    res = PyList_New(o->n);
+    if (unlikely(res == NULL)) {
+        return NULL;
+    }
+    res_items = _PyList_ITEMS(res);
+    for (i = 0; i < o->n; ++o->taken) {
+        res_items[i] = func(iterable, o->taken);
+        if (unlikely(res_items[i++] == NULL)) {
+            Py_DECREF(res);
+            return NULL;
+        }
+    }
+    if (o->taken >= o->info.sized.n_left) {
+        if (o->info.sized.n_left == o->info.sized.size) {
+            o->done = 1;
+        }
+        else {
+            o->info.sized.n_left = o->info.sized.size;
+            --o->n;
+        }
+    }
+    return res;
+}
+
+PyObject *
+chunkedeven_dict_iternext(chunkedevenobject *o)
+{
+    Py_RETURN_NONE;
+}
+
+PyObject *
+chunkedeven_set_iternext(chunkedevenobject *o)
+{
+    Py_RETURN_NONE;
+}
+
+PyObject *
+chunkedeven_generic_iternext(chunkedevenobject *o)
+{
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+fast_itertools_chunked_even(PyObject *self,
+                            PyObject *const *args,
+                            Py_ssize_t nargs,
+                            PyObject *kwnames)
+{
+    PyObject *iterable = NULL;
+    int iterable_given = 0;
+    Py_ssize_t n, quot, rem;
+    PyObject *n_arg;
+    int n_given = 0;
+    Py_ssize_t nkwargs = 0;
+    Py_ssize_t kwname_length;
+    PyASCIIObject *kwname;
+    void *kwname_data;
+    Py_ssize_t i;
+    size_t n_temp;
+    PyObject **kwnames_items;
+    Py_ssize_t largs = nargs;
+    sized_info s;
+
+    if (kwnames) {
+        largs += (nkwargs = PyTuple_GET_SIZE(kwnames));
+        kwnames_items = ((PyTupleObject *)kwnames)->ob_item;
+    }
+    if (unlikely(largs != 2)) {
+        PyErr_Format(PyExc_TypeError,
+                     "fast_itertools.chunked_even() takes 2 "
+                     "arguments (given %zd)",
+                     largs);
+        goto error;
+    }
+
+    switch (nargs) {
+    case 2:
+        n_given = 1;
+        n_arg = args[1];
+        if (likely(PyLong_Check(n_arg))) {
+            Py_ssize_t long_arg_size = Py_SIZE(n_arg);
+            digit *ob_digit;
+            switch (long_arg_size) {
+            case 0:
+                n = 0;
+                break;
+            case 1:
+                n = ((PyLongObject *)n_arg)->ob_digit[0];
+                break;
+            case 2:
+                ob_digit = ((PyLongObject *)n_arg)->ob_digit;
+                n = ob_digit[0] | (ob_digit[1] << PyLong_SHIFT);
+                break;
+            case 3:
+                ob_digit = ((PyLongObject *)n_arg)->ob_digit;
+                n_temp = (ob_digit[0]
+                          | ((ob_digit[1] | (ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
+                if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX)) {
+                    PyErr_Format(PyExc_OverflowError,
+                                 "'n' argument for fast_itertools.chunked_even() must be "
+                                 "None or a positive number <= %zd",
+                                 PY_SSIZE_T_MAX);
+                    goto error;
+                }
+                n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
+                break;
+            default:
+                PyErr_Format(PyExc_OverflowError,
+                             "'n' argument for fast_itertools.chunked_even() must be "
+                             "None or a positive number <= %zd",
+                             PY_SSIZE_T_MAX);
+                goto error;
+            }
+        }
+        else if (n_arg == Py_None) {
+            n = PY_SSIZE_T_MAX;
+        }
+        else {
+            PyErr_Format(PyExc_ValueError,
+                         "'n' argument for fast_itertools.chunked_even() must be "
+                         "None or an integer (0 <= n <= %zd)",
+                         PY_SSIZE_T_MAX);
+            goto error;
+        }
+    case 1:
+        iterable_given = 1;
+        iterable = args[0];
+        if (unlikely(iterable == NULL)) {
+            goto error;
+        }
+        break;
+    }
+
+    for (i = 0; i < nkwargs; i++) {
+        kwname_length = (kwname = (PyASCIIObject *)kwnames_items[i])->length;
+        kwname_data = PyUnicode_DATA(kwname);
+        if (unlikely(
+                kwname_length == 8 &&
+                memcmp(kwname_data, "iterable", 8) == 0
+            ))
+        {
+            if (unlikely(iterable_given == 1)) {
+                PyErr_SetString(PyExc_TypeError,
+                                "fast_itertools.chunked_even() got multiple values "
+                                "for argument 'iterable'");
+                goto error;
+            }
+            iterable = args[nargs + i];
+            if (unlikely(iterable == NULL)) {
+                goto error;
+            }
+        }
+        else if (likely(
+                    kwname_length == 1 &&
+                    *((char *)kwname_data) == 'n'
+                 ))
+        {
+            if (unlikely(n_given == 1)) {
+                PyErr_SetString(PyExc_TypeError,
+                                "fast_itertools.chunked_even() got multiple values "
+                                "for argument 'n'");
+                goto error;
+            }
+            n_arg = args[nargs + i];
+            if (likely(PyLong_Check(n_arg))) {
+                Py_ssize_t long_arg_size = Py_SIZE(n_arg);
+                digit *ob_digit;
+                switch (long_arg_size) {
+                case 0:
+                    n = 0;
+                    break;
+                case 1:
+                    n = ((PyLongObject *)n_arg)->ob_digit[0];
+                    break;
+                case 2:
+                    ob_digit = ((PyLongObject *)n_arg)->ob_digit;
+                    n = ob_digit[0] | (ob_digit[1] << PyLong_SHIFT);
+                    break;
+                case 3:
+                    ob_digit = ((PyLongObject *)n_arg)->ob_digit;
+                    n_temp = (ob_digit[0]
+                              | ((ob_digit[1] | (ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
+                    if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX)) {
+                        PyErr_Format(PyExc_OverflowError,
+                                     "'n' argument for fast_itertools.chunked_even() must be "
+                                     "None or a positive number <= %zd",
+                                     PY_SSIZE_T_MAX);
+                        goto error;
+                    }
+                    n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
+                    break;
+                default:
+                    PyErr_Format(PyExc_OverflowError,
+                                 "'n' argument for fast_itertools.chunked_even() must be "
+                                 "None or a positive number <= %zd",
+                                 PY_SSIZE_T_MAX);
+                    goto error;
+                }
+            }
+            else if (n_arg == Py_None) {
+                n = PY_SSIZE_T_MAX;
+            }
+            else {
+                PyErr_Format(PyExc_ValueError,
+                             "'n' argument for fast_itertools.chunked_even() must be "
+                             "None or an integer (0 <= n <= %zd)",
+                             PY_SSIZE_T_MAX);
+                goto error;
+            }
+        }
+    }
+
+    chunkedevenobject *res = (chunkedevenobject *)chunkedeven_type.tp_alloc(&chunkedeven_type, 0);
+    if (unlikely(res == NULL)) {
+        PyErr_NoMemory();
+        goto error;
+    }
+    res->iterable = Py_NewRef(iterable);
+    res->n = n;
+    res->done = 0;
+    SIZEDINFO_RET status = get_sized_info(iterable, &s);
+    res->type = status;
+    if (status) {
+        /* also covers status == L_SEQITEREMPTY */
+        if (unlikely(s.size == 0)) {
+            res->done = 1;
+            return (PyObject *)res;
+        }
+        res->info.sized.size = s.size;
+        quot = s.size / n;
+        rem = s.size % n;
+        i = quot + (rem != 0);
+        res->n = (s.size/i + (s.size%i != 0));
+        res->info.sized.n_left = s.size%i * res->n;
+        if (unlikely(res->info.sized.n_left == 0)) {
+            res->info.sized.n_left = res->info.sized.size;
+        }
+        if (status == LF_SEQ) {
+            res->info.sized.func = s.func;
+            res->func = chunkedeven_sizedwrapper;
+        }
+        else if (status == L_DICT) {
+            res->func = chunkedeven_dict_iternext;
+        }
+        else { /* status == L_SET */
+            res->func = chunkedeven_set_iternext;
+        }
+    }
+    else {
+        res->iterable = iterable;
+        n *= n - 2;
+        if (unlikely(n > PY_SSIZE_T_MAX/sizeof(PyObject *) - 2)) {
+            PyErr_NoMemory();
+            goto error;
+        }
+        res->info.lazy.bufsize = n + 2;
+        res->info.lazy.buf = PyObject_Calloc(n + 2, sizeof(PyObject *));
+        if (unlikely(res->info.lazy.buf == NULL)) {
+            PyErr_NoMemory();
+            goto error;
+        }
+        res->info.lazy.headidx = res->info.lazy.tailidx = 0;
+        res->func = chunkedeven_generic_iternext;
+    }
+    return (PyObject *)res;
+  error:
+    return NULL;
+}
+
+static void
+chunkedeven_dealloc(chunkedevenobject *o)
+{
+    PyObject_GC_UnTrack(o);
+    Py_XDECREF(o->iterable);
+    if (o->type == 0) {
+        PyObject_Free(o->info.lazy.buf);
+    }
+    Py_TYPE(o)->tp_free(o);
+}
+
+static int
+chunkedeven_traverse(chunkedevenobject *o, visitproc visit, void *arg)
+{
+    Py_VISIT(o->iterable);
+    return 0;
+}
+
+static PyObject *
+chunkedeven_next(chunkedevenobject *o)
+{
+    if (!o->done) {
+        if (o->type == 0 || o->taken != o->info.sized.size) {
+            return o->func(o);
+        }
+        o->done = 1;
+    }
+
+    PyErr_SetNone(PyExc_StopIteration);
+    return NULL;
+}
+
+#define READONLY_MEMBER(field, type) \
+    {#field, type, offsetof(chunkedevenobject, field), READONLY},
+
+static PyMemberDef chunkedeven_members[] = {
+    READONLY_MEMBER(iterable, T_OBJECT)
+    READONLY_MEMBER(n, T_PYSSIZET)
+    READONLY_MEMBER(taken, T_PYSSIZET)
+    READONLY_MEMBER(type, T_INT)
+    READONLY_MEMBER(done, T_BOOL)
+    {NULL}
+};
+
+static PyTypeObject chunkedeven_type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "fast_itertools.chunked_even([], 0).__class__",
+    .tp_basicsize = sizeof(chunkedevenobject),
+    .tp_dealloc = (destructor)chunkedeven_dealloc,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE |
+                    Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_IMMUTABLETYPE,
+    .tp_doc = "Base class for the result of fast_itertools.chunked_even()",
+    .tp_traverse = (traverseproc)chunkedeven_traverse,
+    .tp_iter = PyObject_SelfIter,
+    .tp_iternext = (iternextfunc)chunkedeven_next,
+    .tp_members = chunkedeven_members,
+    .tp_alloc = PyType_GenericAlloc,
+    .tp_new = PyType_GenericNew,
+    .tp_free = PyObject_GC_Del,
+};
+
+PyDoc_STRVAR(chunked_even__doc__,
+"fast_itertools.chunked_even(iterable, n, strict=False)\n\
+    Break *iterable* into lists of length *n*:\n\
+\n\
+        >>> list(fast_itertools.chunked_even([1, 2, 3, 4, 5, 6], 3))\n\
+        [[1, 2, 3], [4, 5, 6]]\n\
+\n\
+    By the default, the last yielded list will have fewer than *n* elements\n\
+    if the length of *iterable* is not divisible by *n*:\n\
+\n\
+        >>> list(fast_itertools.chunked_even([1, 2, 3, 4, 5, 6, 7, 8], 3))\n\
+        [[1, 2, 3], [4, 5, 6], [7, 8]]\n\
+\n\
+    To use a fill-in value instead, see the :func:`fast_itertools.grouper` recipe.\n\
+\n\
+    If the length of *iterable* is not divisible by *n* and *strict* is\n\
+    ``True``, then ``ValueError`` will be raised before the last\n\
+    list is yielded.\n");
+
+/* .chunked_even() and chunked_even object END ******************************/
+
 /* .take() ******************************************************************/
 
 static PyObject *
@@ -1425,11 +1875,15 @@ PyDoc_STRVAR(take__doc__,
         >>> fast_itertools.take(range(3), 10)\n\
         [0, 1, 2]\n");
 
+/* .take() END **************************************************************/
+
 static PyMethodDef fast_itertools_methods[] = {
     {"chunked", (PyCFunction)fast_itertools_chunked, METH_FASTCALL | METH_KEYWORDS,
      chunked__doc__},
     {"ichunked", (PyCFunction)fast_itertools_ichunked, METH_FASTCALL | METH_KEYWORDS,
      ichunked__doc__},
+    {"chunked_even", (PyCFunction)fast_itertools_chunked_even, METH_FASTCALL | METH_KEYWORDS,
+     chunked_even__doc__},
     {"take", (PyCFunction)fast_itertools_take, METH_FASTCALL | METH_KEYWORDS,
      take__doc__},
     {NULL}
