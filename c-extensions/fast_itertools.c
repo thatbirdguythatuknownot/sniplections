@@ -218,27 +218,28 @@ fast_itertools_chunked(PyObject *self,
                 break;
             case 2:
                 ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                n = ob_digit[0] | (ob_digit[1] << PyLong_SHIFT);
+                n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
+#if SIZEOF_SIZE_T == 8
                 break;
             case 3:
                 ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                n_temp = (ob_digit[0]
-                          | ((ob_digit[1] | (ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
-                if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX)) {
-                    PyErr_Format(PyExc_OverflowError,
-                                 "'n' argument for fast_itertools.chunked() must be "
-                                 "None or a positive number <= %zd",
-                                 PY_SSIZE_T_MAX);
-                    goto error;
+                n_temp = ((size_t)ob_digit[0]
+                          | (((size_t)ob_digit[1]
+                              | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
+#endif
+                if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
+#if SIZEOF_SIZE_T == 8
+                             ob_digit[2] >= 4))
+#else
+                             ob_digit[1] >= 2))
+#endif
+                {
+                    goto overflow_error;
                 }
                 n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
                 break;
             default:
-                PyErr_Format(PyExc_OverflowError,
-                             "'n' argument for fast_itertools.chunked() must be "
-                             "None or a positive number <= %zd",
-                             PY_SSIZE_T_MAX);
-                goto error;
+                goto overflow_error;
             }
         }
         else if (n_arg == Py_None) {
@@ -309,27 +310,28 @@ fast_itertools_chunked(PyObject *self,
                     break;
                 case 2:
                     ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                    n = ob_digit[0] | (ob_digit[1] << PyLong_SHIFT);
+                    n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
+#if SIZEOF_SIZE_T == 8
                     break;
                 case 3:
                     ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                    n_temp = (ob_digit[0]
-                              | ((ob_digit[1] | (ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
-                    if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX)) {
-                        PyErr_Format(PyExc_OverflowError,
-                                     "'n' argument for fast_itertools.chunked() must be "
-                                     "None or a positive number <= %zd",
-                                     PY_SSIZE_T_MAX);
-                        goto error;
+                    n_temp = ((size_t)ob_digit[0]
+                              | (((size_t)ob_digit[1]
+                                  | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
+#endif
+                    if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
+#if SIZEOF_SIZE_T == 8
+                                 ob_digit[2] >= 4))
+#else
+                                 ob_digit[1] >= 2))
+#endif
+                    {
+                        goto overflow_error;
                     }
                     n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
                     break;
                 default:
-                    PyErr_Format(PyExc_OverflowError,
-                                 "'n' argument for fast_itertools.chunked() must be "
-                                 "None or a positive number <= %zd",
-                                 PY_SSIZE_T_MAX);
-                    goto error;
+                    goto overflow_error;
                 }
             }
             else if (n_arg == Py_None) {
@@ -385,6 +387,11 @@ fast_itertools_chunked(PyObject *self,
     res->strict = strict;
     res->done = 0;
     return (PyObject *)res;
+overflow_error:
+    PyErr_Format(PyExc_OverflowError,
+                 "'n' argument for fast_itertools.chunked() must "
+                 "be None or a positive number <= %zd",
+                 PY_SSIZE_T_MAX);
   error:
     Py_XDECREF(iterable);
     return NULL;
@@ -564,27 +571,28 @@ ichunk__new__(PyTypeObject *type, PyObject *args, PyObject *kwargs)
                     break;
                 case 2:
                     ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                    n = ob_digit[0] | (ob_digit[1] << PyLong_SHIFT);
+                    n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
+#if SIZEOF_SIZE_T == 8
                     break;
                 case 3:
                     ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                    n_temp = (ob_digit[0]
-                              | ((ob_digit[1] | (ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
-                    if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX)) {
-                        PyErr_Format(PyExc_OverflowError,
-                                     "'n' argument for fast_itertools.ichunk() must "
-                                     "be None or a positive number <= %zd",
-                                     PY_SSIZE_T_MAX);
-                        return NULL;
+                    n_temp = ((size_t)ob_digit[0]
+                              | (((size_t)ob_digit[1]
+                                  | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
+#endif
+                    if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
+#if SIZEOF_SIZE_T == 8
+                                 ob_digit[2] >= 4))
+#else
+                                 ob_digit[1] >= 2))
+#endif
+                    {
+                        goto overflow_error;
                     }
                     n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
                     break;
                 default:
-                    PyErr_Format(PyExc_OverflowError,
-                                 "'n' argument for fast_itertools.ichunk() must "
-                                 "be None or a positive number <= %zd",
-                                 PY_SSIZE_T_MAX);
-                    return NULL;
+                    goto overflow_error;
                 }
             }
             else if (n_arg == Py_None) {
@@ -623,6 +631,12 @@ ichunk__new__(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     }
 
     return ichunk_new(type, iterable, n, NULL);
+overflow_error:
+    PyErr_Format(PyExc_OverflowError,
+                 "'n' argument for fast_itertools.ichunk() must "
+                 "be None or a positive number <= %zd",
+                 PY_SSIZE_T_MAX);
+    return NULL;
 }
 
 Py_LOCAL_INLINE(int)
@@ -766,13 +780,22 @@ ichunk_setstate(ichunkobject *o, PyObject *num)
         break;
     case 2:
         ob_digit = ((PyLongObject *)num)->ob_digit;
-        n = ob_digit[0] | (ob_digit[1] << PyLong_SHIFT);
+        n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
+#if SIZEOF_SIZE_T == 8
         break;
     case 3:
-        ob_digit = ((PyLongObject *)num)->ob_digit;
-        n_temp = (ob_digit[0]
-                  | ((ob_digit[1] | (ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
-        if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX)) {
+        ob_digit = ((PyLongObject *)n_arg)->ob_digit;
+        n_temp = ((size_t)ob_digit[0]
+                  | (((size_t)ob_digit[1]
+                      | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
+#endif
+        if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
+#if SIZEOF_SIZE_T == 8
+                     ob_digit[2] >= 4))
+#else
+                     ob_digit[1] >= 2))
+#endif
+        {
             goto invalid_argument;
         }
         n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
@@ -876,27 +899,28 @@ fast_itertools_ichunked(PyObject *self,
                 break;
             case 2:
                 ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                n = ob_digit[0] | (ob_digit[1] << PyLong_SHIFT);
+                n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
+#if SIZEOF_SIZE_T == 8
                 break;
             case 3:
                 ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                n_temp = (ob_digit[0]
-                          | ((ob_digit[1] | (ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
-                if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX)) {
-                    PyErr_Format(PyExc_OverflowError,
-                                 "'n' argument for fast_itertools.ichunked() must be "
-                                 "None or a positive number <= %zd",
-                                 PY_SSIZE_T_MAX);
-                    goto error;
+                n_temp = ((size_t)ob_digit[0]
+                          | (((size_t)ob_digit[1]
+                              | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
+#endif
+                if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
+#if SIZEOF_SIZE_T == 8
+                             ob_digit[2] >= 4))
+#else
+                             ob_digit[1] >= 2))
+#endif
+                {
+                    goto overflow_error;
                 }
                 n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
                 break;
             default:
-                PyErr_Format(PyExc_OverflowError,
-                             "'n' argument for fast_itertools.ichunked() must be "
-                             "None or a positive number <= %zd",
-                             PY_SSIZE_T_MAX);
-                goto error;
+                goto overflow_error;
             }
         }
         else if (n_arg == Py_None) {
@@ -959,27 +983,28 @@ fast_itertools_ichunked(PyObject *self,
                     break;
                 case 2:
                     ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                    n = ob_digit[0] | (ob_digit[1] << PyLong_SHIFT);
+                    n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
+#if SIZEOF_SIZE_T == 8
                     break;
                 case 3:
                     ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                    n_temp = (ob_digit[0]
-                              | ((ob_digit[1] | (ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
-                    if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX)) {
-                        PyErr_Format(PyExc_OverflowError,
-                                     "'n' argument for fast_itertools.ichunked() must be "
-                                     "None or a positive number <= %zd",
-                                     PY_SSIZE_T_MAX);
-                        goto error;
+                    n_temp = ((size_t)ob_digit[0]
+                              | (((size_t)ob_digit[1]
+                                  | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
+#endif
+                    if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
+#if SIZEOF_SIZE_T == 8
+                                 ob_digit[2] >= 4))
+#else
+                                 ob_digit[1] >= 2))
+#endif
+                    {
+                        goto overflow_error;
                     }
                     n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
                     break;
                 default:
-                    PyErr_Format(PyExc_OverflowError,
-                                 "'n' argument for fast_itertools.ichunked() must be "
-                                 "None or a positive number <= %zd",
-                                 PY_SSIZE_T_MAX);
-                    goto error;
+                    goto overflow_error;
                 }
             }
             else if (n_arg == Py_None) {
@@ -1010,6 +1035,11 @@ fast_itertools_ichunked(PyObject *self,
     res->n = n;
     res->done = 0;
     return (PyObject *)res;
+overflow_error:
+    PyErr_Format(PyExc_OverflowError,
+                 "'n' argument for fast_itertools.ichunked() must "
+                 "be None or a positive number <= %zd",
+                 PY_SSIZE_T_MAX);
   error:
     Py_XDECREF(iterable);
     return NULL;
@@ -1429,7 +1459,11 @@ fast_itertools_chunked_even(PyObject *self,
                               | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
 #endif
                 if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
+#if SIZEOF_SIZE_T == 8
                              ob_digit[2] >= 4))
+#else
+                             ob_digit[1] >= 2))
+#endif
                 {
                     goto overflow_error;
                 }
@@ -1443,7 +1477,11 @@ fast_itertools_chunked_even(PyObject *self,
             n = PY_SSIZE_T_MAX;
         }
         else {
-            goto overflow_error;
+            PyErr_Format(PyExc_ValueError,
+                         "'n' argument for fast_itertools.chunked_even() "
+                         "must be None or an integer (1 <= n <= %zd)",
+                         PY_SSIZE_T_MAX);
+            goto error;
         }
     case 1:
         iterable_given = 1;
@@ -1510,7 +1548,11 @@ fast_itertools_chunked_even(PyObject *self,
                                   | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
 #endif
                     if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
+#if SIZEOF_SIZE_T == 8
                                  ob_digit[2] >= 4))
+#else
+                                 ob_digit[1] >= 2))
+#endif
                     {
                         goto overflow_error;
                     }
@@ -1524,7 +1566,11 @@ fast_itertools_chunked_even(PyObject *self,
                 n = PY_SSIZE_T_MAX;
             }
             else {
-                goto overflow_error;
+                PyErr_Format(PyExc_ValueError,
+                             "'n' argument for fast_itertools.chunked_even() "
+                             "must be None or an integer (1 <= n <= %zd)",
+                             PY_SSIZE_T_MAX);
+                goto error;
             }
         }
     }
@@ -1757,27 +1803,28 @@ fast_itertools_take(PyObject *self,
                 break;
             case 2:
                 ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                n = ob_digit[0] | (ob_digit[1] << PyLong_SHIFT);
+                n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
+#if SIZEOF_SIZE_T == 8
                 break;
             case 3:
                 ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                n_temp = (ob_digit[0]
-                          | ((ob_digit[1] | (ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
-                if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX)) {
-                    PyErr_Format(PyExc_OverflowError,
-                                 "'n' argument for fast_itertools.take() must be "
-                                 "None or a positive number <= %zd",
-                                 PY_SSIZE_T_MAX);
-                    goto error;
+                n_temp = ((size_t)ob_digit[0]
+                          | (((size_t)ob_digit[1]
+                              | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
+#endif
+                if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
+#if SIZEOF_SIZE_T == 8
+                             ob_digit[2] >= 4))
+#else
+                             ob_digit[1] >= 2))
+#endif
+                {
+                    goto overflow_error;
                 }
                 n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
                 break;
             default:
-                PyErr_Format(PyExc_OverflowError,
-                             "'n' argument for fast_itertools.take() must be "
-                             "None or a positive number <= %zd",
-                             PY_SSIZE_T_MAX);
-                goto error;
+                goto overflow_error;
             }
         }
         else if (n_arg == Py_None) {
@@ -1788,7 +1835,7 @@ fast_itertools_take(PyObject *self,
                          "'n' argument for fast_itertools.take() must be "
                          "None or an integer (0 <= n <= %zd)",
                          PY_SSIZE_T_MAX);
-            goto error;
+            goto overflow_error;
         }
     case 1:
         iterable_given = 1;
@@ -1841,27 +1888,28 @@ fast_itertools_take(PyObject *self,
                     break;
                 case 2:
                     ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                    n = ob_digit[0] | (ob_digit[1] << PyLong_SHIFT);
+                    n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
+#if SIZEOF_SIZE_T == 8
                     break;
                 case 3:
                     ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                    n_temp = (ob_digit[0]
-                              | ((ob_digit[1] | (ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
-                    if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX)) {
-                        PyErr_Format(PyExc_OverflowError,
-                                     "'n' argument for fast_itertools.take() must be "
-                                     "None or a positive number <= %zd",
-                                     PY_SSIZE_T_MAX);
-                        goto error;
+                    n_temp = ((size_t)ob_digit[0]
+                              | (((size_t)ob_digit[1]
+                                  | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
+#endif
+                    if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
+#if SIZEOF_SIZE_T == 8
+                                 ob_digit[2] >= 4))
+#else
+                                 ob_digit[1] >= 2))
+#endif
+                    {
+                        goto overflow_error;
                     }
                     n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
                     break;
                 default:
-                    PyErr_Format(PyExc_OverflowError,
-                                 "'n' argument for fast_itertools.take() must be "
-                                 "None or a positive number <= %zd",
-                                 PY_SSIZE_T_MAX);
-                    goto error;
+                    goto overflow_error;
                 }
             }
             else if (n_arg == Py_None) {
@@ -2117,6 +2165,11 @@ fast_itertools_take(PyObject *self,
     }
   finn:
     return res;
+  overflow_error:
+    PyErr_Format(PyExc_OverflowError,
+                 "'n' argument for fast_itertools.take() must be "
+                 "None or a positive number <= %zd",
+                 PY_SSIZE_T_MAX);
   error:
     Py_XDECREF(res);
     return NULL;
