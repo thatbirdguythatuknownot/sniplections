@@ -247,3 +247,18 @@ average time (nonsimulated, 20 exp / message): 65d 22h 43m (94963 messages)
 --B--
     average time (simulated, normal pseudorandom): 65d 22h 38m (94958 messages)
 ```
+
+**electronconfig.py**<br/>
+Generate the electron configuration for a specific atomic number. Interactive mode (`py electronconfig.py`) accepts both names, abbreviations, and atomic numbers. Example (for non-interactive mode):
+```py
+from electronconfig import gen_config, config_to_print
+print(gen_config(5), config_to_print(5)) # [(1, 's', 2), (2, 's', 2), (2, 'p', 1)] 1s²2s²2p¹
+```
+Example (for interactive mode):
+```
+> sodium cl o 6
+EC sodium = 1s²2s²2p⁶3s¹
+EC cl (chlorine) = 1s²2s²2p⁶3s²3p⁵
+EC o (oxygen) = 1s²2s²2p⁴
+EC 6 (carbon) = 1s²2s²2p²
+```
