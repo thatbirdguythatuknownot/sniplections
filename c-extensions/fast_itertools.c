@@ -1098,8 +1098,8 @@ static PyTypeObject ichunked_type = {
 PyDoc_STRVAR(ichunked__doc__,
 "ichunked(iterable, n)\n\
     Break *iterable* into sub-iterables with *n* elements each.\n\
-    :func:`ichunked` is like :func:`chunked`, but it yields iterables\n\
-    instead of lists.\n\
+    :func:`fast_itertools.ichunked` is like :func:`fast_itertools.chunked`,\n\
+    but it yields iterables instead of lists.\n\
 \n\
     If the sub-iterables are read in order, the elements of *iterable*\n\
     won't be stored in memory.\n\
@@ -1487,6 +1487,7 @@ fast_itertools_chunked_even(PyObject *self,
         iterable_given = 1;
         iterable = args[0];
         if (unlikely(iterable == NULL)) {
+            PyErr_BadArgument();
             goto error;
         }
         break;
@@ -1508,6 +1509,7 @@ fast_itertools_chunked_even(PyObject *self,
             }
             iterable = args[nargs + i];
             if (unlikely(iterable == NULL)) {
+                PyErr_BadArgument();
                 goto error;
             }
         }
@@ -1627,7 +1629,6 @@ fast_itertools_chunked_even(PyObject *self,
         }
     }
     else {
-        res->iterable = iterable;
         res->taken = 0;
         n *= n - 2;
         if (unlikely(n > PY_SSIZE_T_MAX/sizeof(PyObject *) - 2)) {
@@ -1755,6 +1756,421 @@ PyDoc_STRVAR(chunked_even__doc__,
     [[1, 2, 3], [4, 5, 6], [7]]\n");
 
 /* .chunked_even() and chunked_even object END ******************************/
+
+/* .sliced() and sliced object ********************************************/
+
+static PyTypeObject sliced_type;
+
+typedef struct _slicedobject {
+    PyObject_HEAD;
+    PyObject *iterable;
+    PyObject *(*func)(struct _slicedobject *);
+    Py_ssize_t n;
+    Py_ssize_t idx;
+    int strict;
+    int done;
+    union {
+        binaryfunc getitem;
+        struct {
+            PyObject **items;
+            PyObject *(*seqnew)(Py_ssize_t);
+        } seq;
+    } extra_info;
+} slicedobject;
+
+PyObject *
+sliced_seq_iternext(slicedobject *o)
+{
+    PyObject *res, **dest, **src = o->extra_info.seq.items;
+    Py_ssize_t i, n = Py_MIN(o->n, Py_SIZE(o->iterable) - o->idx);
+    src += o->idx;
+
+    res = o->extra_info.seq.seqnew(n);
+    if (unlikely(res == NULL)) {
+        return NULL;
+    }
+    if (n) {
+        dest = PyList_CheckExact(res) ?
+               _PyList_ITEMS(res) :
+               _PyTuple_ITEMS(res);
+
+        for (i = 0; i < n; ++i) {
+            dest[i] = src[i];
+            Py_INCREF(dest[i]);
+        }
+    }
+
+    return res;
+}
+
+PyObject *
+sliced_generic_iternext(slicedobject *o)
+{
+    PyObject *slice = _PySlice_FromIndices(o->idx, o->idx + o->n);
+    if (unlikely(slice == NULL)) {
+        return NULL;
+    }
+    PyObject *res = o->extra_info.getitem(o->iterable, slice);
+    Py_DECREF(slice);
+    return res;
+}
+
+static PyObject *
+fast_itertools_sliced(PyObject *self,
+                       PyObject *const *args,
+                       Py_ssize_t nargs,
+                       PyObject *kwnames)
+{
+    PyObject *iterable = NULL;
+    int iterable_given = 0;
+    Py_ssize_t n;
+    PyObject *n_arg;
+    int n_given = 0;
+    int strict = 0;
+    int strict_given = 0;
+    Py_ssize_t nkwargs = 0;
+    Py_ssize_t kwname_length;
+    PyASCIIObject *kwname;
+    void *kwname_data;
+    Py_ssize_t i;
+    size_t n_temp;
+    PyObject **kwnames_items;
+    Py_ssize_t largs = nargs;
+
+    if (kwnames) {
+        largs += (nkwargs = PyTuple_GET_SIZE(kwnames));
+        kwnames_items = ((PyTupleObject *)kwnames)->ob_item;
+    }
+    if (unlikely(largs < 2 || largs > 3)) {
+        PyErr_Format(PyExc_TypeError,
+                     "fast_itertools.sliced() takes from 2 to 3 "
+                     "arguments (given %zd)",
+                     largs);
+        goto error;
+    }
+
+    switch (nargs) {
+    case 3:
+        strict_given = 1;
+        strict = PyObject_IsTrue(args[2]);
+        if (unlikely(strict < 0)) {
+            goto error;
+        }
+    case 2:
+        n_given = 1;
+        n_arg = args[1];
+        if (likely(PyLong_Check(n_arg))) {
+            Py_ssize_t long_arg_size = Py_SIZE(n_arg);
+            digit *ob_digit;
+            switch (long_arg_size) {
+            case 0:
+                n = 0;
+                break;
+            case 1:
+                n = ((PyLongObject *)n_arg)->ob_digit[0];
+                break;
+            case 2:
+                ob_digit = ((PyLongObject *)n_arg)->ob_digit;
+                n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
+#if SIZEOF_SIZE_T == 8
+                break;
+            case 3:
+                ob_digit = ((PyLongObject *)n_arg)->ob_digit;
+                n_temp = ((size_t)ob_digit[0]
+                          | (((size_t)ob_digit[1]
+                              | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
+#endif
+                if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
+#if SIZEOF_SIZE_T == 8
+                             ob_digit[2] >= 4))
+#else
+                             ob_digit[1] >= 2))
+#endif
+                {
+                    goto overflow_error;
+                }
+                n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
+                break;
+            default:
+                goto overflow_error;
+            }
+        }
+        else if (n_arg == Py_None) {
+            if (unlikely(strict)) {
+                PyErr_SetString(PyExc_ValueError,
+                                "fast_itertools.sliced(): 'n' must not be "
+                                "None when using strict mode");
+                goto error;
+            }
+            n = PY_SSIZE_T_MAX;
+        }
+        else {
+            PyErr_Format(PyExc_ValueError,
+                         "'n' argument for fast_itertools.sliced() must be "
+                         "None or an integer (0 <= n <= %zd)",
+                         PY_SSIZE_T_MAX);
+            goto error;
+        }
+    case 1:
+        iterable_given = 1;
+        iterable = args[0];
+        if (unlikely(iterable == NULL)) {
+            PyErr_BadArgument();
+            goto error;
+        }
+        break;
+    }
+
+    for (i = 0; i < nkwargs; i++) {
+        kwname_length = (kwname = (PyASCIIObject *)kwnames_items[i])->length;
+        kwname_data = PyUnicode_DATA(kwname);
+        if (unlikely(
+                kwname_length == 8 &&
+                memcmp(kwname_data, "iterable", 8) == 0
+            ))
+        {
+            if (unlikely(iterable_given == 1)) {
+                PyErr_SetString(PyExc_TypeError,
+                                "fast_itertools.sliced() got multiple values "
+                                "for argument 'iterable'");
+                goto error;
+            }
+            iterable = args[nargs + i];
+            if (unlikely(iterable == NULL)) {
+                PyErr_BadArgument();
+                goto error;
+            }
+        }
+        else if (likely(
+                    kwname_length == 1 &&
+                    *((char *)kwname_data) == 'n'
+                 ))
+        {
+            if (unlikely(n_given == 1)) {
+                PyErr_SetString(PyExc_TypeError,
+                                "fast_itertools.sliced() got multiple values "
+                                "for argument 'n'");
+                goto error;
+            }
+            n_arg = args[nargs + i];
+            if (likely(PyLong_Check(n_arg))) {
+                Py_ssize_t long_arg_size = Py_SIZE(n_arg);
+                digit *ob_digit;
+                switch (long_arg_size) {
+                case 0:
+                    n = 0;
+                    break;
+                case 1:
+                    n = ((PyLongObject *)n_arg)->ob_digit[0];
+                    break;
+                case 2:
+                    ob_digit = ((PyLongObject *)n_arg)->ob_digit;
+                    n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
+#if SIZEOF_SIZE_T == 8
+                    break;
+                case 3:
+                    ob_digit = ((PyLongObject *)n_arg)->ob_digit;
+                    n_temp = ((size_t)ob_digit[0]
+                              | (((size_t)ob_digit[1]
+                                  | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
+#endif
+                    if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
+#if SIZEOF_SIZE_T == 8
+                                 ob_digit[2] >= 4))
+#else
+                                 ob_digit[1] >= 2))
+#endif
+                    {
+                        goto overflow_error;
+                    }
+                    n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
+                    break;
+                default:
+                    goto overflow_error;
+                }
+            }
+            else if (n_arg == Py_None) {
+                n = PY_SSIZE_T_MAX;
+            }
+            else {
+                PyErr_Format(PyExc_ValueError,
+                             "'n' argument for fast_itertools.sliced() must be "
+                             "None or an integer (0 <= n <= %zd)",
+                             PY_SSIZE_T_MAX);
+                goto error;
+            }
+        }
+        else if (likely(
+                    kwname_length == 6 &&
+                    memcmp(kwname_data, "strict", 6) == 0
+                 ))
+        {
+            if (unlikely(strict_given == 1)) {
+                PyErr_SetString(PyExc_TypeError,
+                                "fast_itertools.sliced() got multiple values "
+                                "for argument 'strict'");
+                goto error;
+            }
+            PyObject *arg = args[nargs + i];
+            if (n_arg == Py_None) {
+                PyErr_SetString(PyExc_ValueError,
+                                "fast_itertools.sliced(): 'n' must not be "
+                                "None when using strict mode");
+                goto error;
+            }
+            strict = PyObject_IsTrue(arg);
+            if (unlikely(strict < 0)) {
+                goto error;
+            }
+        }
+        else {
+            PyErr_Format(PyExc_TypeError,
+                         "fast_itertools.sliced() got an unexpected "
+                         "keyword argument '%U'",
+                         kwname);
+            goto error;
+        }
+    }
+
+    slicedobject *res = (slicedobject *)sliced_type.tp_alloc(&sliced_type, 0);
+    if (unlikely(res == NULL)) {
+        PyErr_NoMemory();
+        goto error;
+    }
+    res->iterable = Py_NewRef(iterable);
+    if (PyList_CheckExact(iterable)) {
+        res->func = sliced_seq_iternext;
+        res->extra_info.seq.items = _PyList_ITEMS(iterable);
+        res->extra_info.seq.seqnew = PyList_New;
+    }
+    else if (PyTuple_CheckExact(iterable)) {
+        res->func = sliced_seq_iternext;
+        res->extra_info.seq.items = _PyTuple_ITEMS(iterable);
+        res->extra_info.seq.seqnew = PyTuple_New;
+    }
+    else {
+        PyMappingMethods *asmap = Py_TYPE(iterable)->tp_as_mapping;
+        if (asmap && asmap->mp_subscript) {
+            res->func = sliced_generic_iternext;
+            res->extra_info.getitem = asmap->mp_subscript;
+        }
+        else {
+            PyErr_SetString(PyExc_ValueError,
+                            "expected sliceable & sized for 'iterable' "
+                            "argument of fast_itertools.sliced()");
+            goto error;
+        }
+    }
+    res->n = n;
+    res->strict = strict;
+    res->done = 0;
+    return (PyObject *)res;
+overflow_error:
+    PyErr_Format(PyExc_OverflowError,
+                 "'n' argument for fast_itertools.sliced() must "
+                 "be None or a positive number <= %zd",
+                 PY_SSIZE_T_MAX);
+  error:
+    return NULL;
+}
+
+static void
+sliced_dealloc(slicedobject *o)
+{
+    PyObject_GC_UnTrack(o);
+    Py_XDECREF(o->iterable);
+    Py_TYPE(o)->tp_free(o);
+}
+
+static int
+sliced_traverse(slicedobject *o, visitproc visit, void *arg)
+{
+    Py_VISIT(o->iterable);
+    return 0;
+}
+
+static PyObject *
+sliced_next(slicedobject *o)
+{
+    if (unlikely(o->done)) {
+        PyErr_SetNone(PyExc_StopIteration);
+        return NULL;
+    }
+
+    PyObject *res = o->func(o);
+    if (unlikely(res == NULL)) {
+        return NULL;
+    }
+
+    Py_ssize_t res_size =
+        PyList_CheckExact(res) || PyTuple_CheckExact(res) ?
+        Py_SIZE(res) :
+        PySequence_Size(res);
+    if (unlikely(res_size == -1)) {
+        PyErr_Format(PyExc_ValueError,
+                     "next(fast_itertools.sliced()): '%.200s' object has "
+                     "no length",
+                     Py_TYPE(res)->tp_name);
+        goto error;
+    }
+    else if (unlikely(o->strict && res_size != o->n)) {
+        PyErr_Format(PyExc_ValueError,
+                     "next(fast_itertools.sliced()): iterable is not "
+                     "divisible by %zd",
+                     o->n);
+        goto error;
+    }
+
+    Py_ssize_t length =
+        PyList_CheckExact(o->iterable) || PyTuple_CheckExact(o->iterable) ?
+        Py_SIZE(o->iterable) :
+        PySequence_Size(o->iterable);
+    if (unlikely((o->idx += o->n) >= length)) {
+        o->done = 1;
+    }
+    return res;
+  error:
+    Py_DECREF(res);
+    return NULL;
+}
+
+static PyTypeObject sliced_type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "fast_itertools.sliced([], 0).__class__",
+    .tp_basicsize = sizeof(slicedobject),
+    .tp_dealloc = (destructor)sliced_dealloc,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE |
+                    Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_IMMUTABLETYPE,
+    .tp_doc = "Base class for the result of fast_itertools.sliced()",
+    .tp_traverse = (traverseproc)sliced_traverse,
+    .tp_iter = PyObject_SelfIter,
+    .tp_iternext = (iternextfunc)sliced_next,
+    .tp_alloc = PyType_GenericAlloc,
+    .tp_new = PyType_GenericNew,
+    .tp_free = PyObject_GC_Del,
+};
+
+PyDoc_STRVAR(sliced__doc__,
+"fast_itertools.sliced(iterable, n, strict=False)\n\
+    Yield slices of length *n* from the sequence *seq*.\n\
+\n\
+    >>> list(sliced((1, 2, 3, 4, 5, 6), 3))\n\
+    [(1, 2, 3), (4, 5, 6)]\n\
+\n\
+    By the default, the last yielded slice will have fewer than *n* elements\n\
+    if the length of *seq* is not divisible by *n*:\n\
+\n\
+    >>> list(sliced((1, 2, 3, 4, 5, 6, 7, 8), 3))\n\
+    [(1, 2, 3), (4, 5, 6), (7, 8)]\n\
+\n\
+    If the length of *seq* is not divisible by *n* and *strict* is\n\
+    ``True``, then ``ValueError`` will be raised before the last\n\
+    slice is yielded.\n\
+\n\
+    This function will only work for iterables that support slicing.\n\
+    For non-sliceable iterables, see :func:`fast_itertools.chunked`.\n");
+
+/* .sliced() and sliced object END ****************************************/
 
 /* .take() ******************************************************************/
 
@@ -2199,6 +2615,8 @@ static PyMethodDef fast_itertools_methods[] = {
      ichunked__doc__},
     {"chunked_even", (PyCFunction)fast_itertools_chunked_even, METH_FASTCALL | METH_KEYWORDS,
      chunked_even__doc__},
+    {"sliced", (PyCFunction)fast_itertools_sliced, METH_FASTCALL | METH_KEYWORDS,
+     sliced__doc__},
     {"take", (PyCFunction)fast_itertools_take, METH_FASTCALL | METH_KEYWORDS,
      take__doc__},
     {NULL}
