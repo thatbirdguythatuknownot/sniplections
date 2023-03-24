@@ -1667,7 +1667,9 @@ chunkedeven_dealloc(chunkedevenobject *o)
 {
     PyObject_GC_UnTrack(o);
     Py_XDECREF(o->iterable);
-    if (o->type == 0) {
+    if (o->type == LF_NONE || o->type == L_AFTERLAZY) {
+        /* this works in both cases since the `.afterlazy.buf` field
+           is aligned with the `.lazy.buf` field */
         PyObject_Free(o->info.lazy.buf);
     }
     Py_TYPE(o)->tp_free(o);
