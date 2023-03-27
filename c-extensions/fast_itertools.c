@@ -936,9 +936,6 @@ fast_itertools_ichunked(PyObject *self,
     case 1:
         iterable_given = 1;
         iterable = PyObject_GetIter(args[0]);
-        if (unlikely(iterable == NULL)) {
-            goto error;
-        }
         break;
     }
 
@@ -955,9 +952,6 @@ fast_itertools_ichunked(PyObject *self,
                 goto error;
             }
             iterable = PyObject_GetIter(args[nargs + i]);
-            if (unlikely(iterable == NULL)) {
-                goto error;
-            }
         }
         else if (likely(
                     kwname_length == 1 &&
@@ -1486,10 +1480,6 @@ fast_itertools_chunked_even(PyObject *self,
     case 1:
         iterable_given = 1;
         iterable = args[0];
-        if (unlikely(iterable == NULL)) {
-            PyErr_BadArgument();
-            goto error;
-        }
         break;
     }
 
@@ -1508,10 +1498,6 @@ fast_itertools_chunked_even(PyObject *self,
                 goto error;
             }
             iterable = args[nargs + i];
-            if (unlikely(iterable == NULL)) {
-                PyErr_BadArgument();
-                goto error;
-            }
         }
         else if (likely(
                     kwname_length == 1 &&
@@ -1916,10 +1902,6 @@ fast_itertools_sliced(PyObject *self,
     case 1:
         iterable_given = 1;
         iterable = args[0];
-        if (unlikely(iterable == NULL)) {
-            PyErr_BadArgument();
-            goto error;
-        }
         break;
     }
 
@@ -1938,10 +1920,6 @@ fast_itertools_sliced(PyObject *self,
                 goto error;
             }
             iterable = args[nargs + i];
-            if (unlikely(iterable == NULL)) {
-                PyErr_BadArgument();
-                goto error;
-            }
         }
         else if (likely(
                     kwname_length == 1 &&
@@ -2258,9 +2236,6 @@ fast_itertools_take(PyObject *self,
     case 1:
         iterable_given = 1;
         iterable = args[0];
-        if (unlikely(iterable == NULL)) {
-            goto error;
-        }
         break;
     }
 
@@ -2277,10 +2252,6 @@ fast_itertools_take(PyObject *self,
                 goto error;
             }
             iterable = args[nargs + i];
-            if (unlikely(iterable == NULL)) {
-                PyErr_BadArgument();
-                goto error;
-            }
         }
         else if (likely(
                     kwname_length == 1 &&
