@@ -207,39 +207,39 @@ fast_itertools_chunked(PyObject *self,
         n_given = 1;
         n_arg = args[1];
         if (likely(PyLong_Check(n_arg))) {
-            Py_ssize_t long_arg_size = Py_SIZE(n_arg);
-            digit *ob_digit;
-            switch (long_arg_size) {
-            case 0:
-                n = 0;
-                break;
-            case 1:
+            const Py_ssize_t long_arg_size = Py_SIZE(n_arg);
+            if (likely(long_arg_size == 1)) {
                 n = ((PyLongObject *)n_arg)->ob_digit[0];
-                break;
-            case 2:
-                ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
+            }
+            else if (long_arg_size == 0) {
+                n = 0;
+            }
+            else {
+                const digit *ob_digit = ((PyLongObject *)n_arg)->ob_digit;
+                switch (long_arg_size) {
+                case 2:
+                    n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
 #if SIZEOF_SIZE_T == 8
-                break;
-            case 3:
-                ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                n_temp = ((size_t)ob_digit[0]
-                          | (((size_t)ob_digit[1]
-                              | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
+                    break;
+                case 3:
+                    n_temp = ((size_t)ob_digit[0]
+                              | (((size_t)ob_digit[1]
+                                  | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
 #endif
-                if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
+                    if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
 #if SIZEOF_SIZE_T == 8
-                             ob_digit[2] >= 8))
+                                 ob_digit[2] >= 8))
 #else
-                             ob_digit[1] >= 2))
+                                 ob_digit[1] >= 2))
 #endif
-                {
+                    {
+                        goto overflow_error;
+                    }
+                    n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
+                    break;
+                default:
                     goto overflow_error;
                 }
-                n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
-                break;
-            default:
-                goto overflow_error;
             }
         }
         else if (n_arg == Py_None) {
@@ -299,39 +299,39 @@ fast_itertools_chunked(PyObject *self,
             }
             n_arg = args[nargs + i];
             if (likely(PyLong_Check(n_arg))) {
-                Py_ssize_t long_arg_size = Py_SIZE(n_arg);
-                digit *ob_digit;
-                switch (long_arg_size) {
-                case 0:
-                    n = 0;
-                    break;
-                case 1:
+                const Py_ssize_t long_arg_size = Py_SIZE(n_arg);
+                if (likely(long_arg_size == 1)) {
                     n = ((PyLongObject *)n_arg)->ob_digit[0];
-                    break;
-                case 2:
-                    ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                    n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
-#if SIZEOF_SIZE_T == 8
-                    break;
-                case 3:
-                    ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                    n_temp = ((size_t)ob_digit[0]
-                              | (((size_t)ob_digit[1]
-                                  | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
-#endif
-                    if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
-#if SIZEOF_SIZE_T == 8
-                                 ob_digit[2] >= 8))
-#else
-                                 ob_digit[1] >= 2))
-#endif
-                    {
+                }
+                else if (long_arg_size == 0) {
+                    n = 0;
+                }
+                else {
+                    const digit *ob_digit = ((PyLongObject *)n_arg)->ob_digit;
+                    switch (long_arg_size) {
+                    case 2:
+                        n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
+    #if SIZEOF_SIZE_T == 8
+                        break;
+                    case 3:
+                        n_temp = ((size_t)ob_digit[0]
+                                  | (((size_t)ob_digit[1]
+                                      | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
+    #endif
+                        if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
+    #if SIZEOF_SIZE_T == 8
+                                     ob_digit[2] >= 8))
+    #else
+                                     ob_digit[1] >= 2))
+    #endif
+                        {
+                            goto overflow_error;
+                        }
+                        n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
+                        break;
+                    default:
                         goto overflow_error;
                     }
-                    n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
-                    break;
-                default:
-                    goto overflow_error;
                 }
             }
             else if (n_arg == Py_None) {
@@ -448,7 +448,7 @@ chunked_next(chunkedobject *o)
                                       n);
                         goto error;
                     }
-                    _PyErr_Clear(tstate);
+                    _PyErr_Restore(tstate, NULL, NULL, NULL);
                     break;
                 }
             }
@@ -560,39 +560,39 @@ ichunk__new__(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         if (likely(nargs == 2)) {
             n_arg = PyTuple_GET_ITEM(args, 1);
             if (likely(PyLong_Check(n_arg))) {
-                Py_ssize_t long_arg_size = Py_SIZE(n_arg);
-                digit *ob_digit;
-                switch (long_arg_size) {
-                case 0:
-                    n = 0;
-                    break;
-                case 1:
+                const Py_ssize_t long_arg_size = Py_SIZE(n_arg);
+                if (likely(long_arg_size == 1)) {
                     n = ((PyLongObject *)n_arg)->ob_digit[0];
-                    break;
-                case 2:
-                    ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                    n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
-#if SIZEOF_SIZE_T == 8
-                    break;
-                case 3:
-                    ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                    n_temp = ((size_t)ob_digit[0]
-                              | (((size_t)ob_digit[1]
-                                  | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
-#endif
-                    if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
-#if SIZEOF_SIZE_T == 8
-                                 ob_digit[2] >= 8))
-#else
-                                 ob_digit[1] >= 2))
-#endif
-                    {
+                }
+                else if (long_arg_size == 0) {
+                    n = 0;
+                }
+                else {
+                    const digit *ob_digit = ((PyLongObject *)n_arg)->ob_digit;
+                    switch (long_arg_size) {
+                    case 2:
+                        n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
+    #if SIZEOF_SIZE_T == 8
+                        break;
+                    case 3:
+                        n_temp = ((size_t)ob_digit[0]
+                                  | (((size_t)ob_digit[1]
+                                      | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
+    #endif
+                        if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
+    #if SIZEOF_SIZE_T == 8
+                                     ob_digit[2] >= 8))
+    #else
+                                     ob_digit[1] >= 2))
+    #endif
+                        {
+                            goto overflow_error;
+                        }
+                        n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
+                        break;
+                    default:
                         goto overflow_error;
                     }
-                    n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
-                    break;
-                default:
-                    goto overflow_error;
                 }
             }
             else if (n_arg == Py_None) {
@@ -665,7 +665,7 @@ ichunk_fillcache_internal(ichunkobject *o)
             {
                 *o->doneptr = 1;
                 if (i > o->cache_min_idx) {
-                    _PyErr_Clear(tstate);
+                    _PyErr_Restore(tstate, NULL, NULL, NULL);
                     break;
                 }
             }
@@ -769,39 +769,39 @@ ichunk_setstate(ichunkobject *o, PyObject *num)
         return NULL;
     }
 
-    Py_ssize_t long_arg_size = Py_SIZE(num);
-    digit *ob_digit;
-    switch (long_arg_size) {
-    case 0:
+    const Py_ssize_t long_arg_size = Py_SIZE(n_arg);
+    if (likely(long_arg_size == 1)) {
+        n = ((PyLongObject *)n_arg)->ob_digit[0];
+    }
+    else if (long_arg_size == 0) {
         n = 0;
-        break;
-    case 1:
-        n = ((PyLongObject *)num)->ob_digit[0];
-        break;
-    case 2:
-        ob_digit = ((PyLongObject *)num)->ob_digit;
-        n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
+    }
+    else {
+        const digit *ob_digit = ((PyLongObject *)n_arg)->ob_digit;
+        switch (long_arg_size) {
+        case 2:
+            n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
 #if SIZEOF_SIZE_T == 8
-        break;
-    case 3:
-        ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-        n_temp = ((size_t)ob_digit[0]
-                  | (((size_t)ob_digit[1]
-                      | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
+            break;
+        case 3:
+            n_temp = ((size_t)ob_digit[0]
+                      | (((size_t)ob_digit[1]
+                          | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
 #endif
-        if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
+            if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
 #if SIZEOF_SIZE_T == 8
-                     ob_digit[2] >= 8))
+                         ob_digit[2] >= 8))
 #else
-                     ob_digit[1] >= 2))
+                         ob_digit[1] >= 2))
 #endif
-        {
+            {
+                goto invalid_argument;
+            }
+            n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
+            break;
+        default:
             goto invalid_argument;
         }
-        n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
-        break;
-    default:
-        goto invalid_argument;
     }
 
     if (unlikely(n < o->cache_min_idx)) {
@@ -888,39 +888,39 @@ fast_itertools_ichunked(PyObject *self,
         n_given = 1;
         n_arg = args[1];
         if (likely(PyLong_Check(n_arg))) {
-            Py_ssize_t long_arg_size = Py_SIZE(n_arg);
-            digit *ob_digit;
-            switch (long_arg_size) {
-            case 0:
-                n = 0;
-                break;
-            case 1:
+            const Py_ssize_t long_arg_size = Py_SIZE(n_arg);
+            if (likely(long_arg_size == 1)) {
                 n = ((PyLongObject *)n_arg)->ob_digit[0];
-                break;
-            case 2:
-                ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
+            }
+            else if (long_arg_size == 0) {
+                n = 0;
+            }
+            else {
+                const digit *ob_digit = ((PyLongObject *)n_arg)->ob_digit;
+                switch (long_arg_size) {
+                case 2:
+                    n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
 #if SIZEOF_SIZE_T == 8
-                break;
-            case 3:
-                ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                n_temp = ((size_t)ob_digit[0]
-                          | (((size_t)ob_digit[1]
-                              | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
+                    break;
+                case 3:
+                    n_temp = ((size_t)ob_digit[0]
+                              | (((size_t)ob_digit[1]
+                                  | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
 #endif
-                if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
+                    if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
 #if SIZEOF_SIZE_T == 8
-                             ob_digit[2] >= 8))
+                                 ob_digit[2] >= 8))
 #else
-                             ob_digit[1] >= 2))
+                                 ob_digit[1] >= 2))
 #endif
-                {
+                    {
+                        goto overflow_error;
+                    }
+                    n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
+                    break;
+                default:
                     goto overflow_error;
                 }
-                n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
-                break;
-            default:
-                goto overflow_error;
             }
         }
         else if (n_arg == Py_None) {
@@ -972,39 +972,39 @@ fast_itertools_ichunked(PyObject *self,
             }
             n_arg = args[nargs + i];
             if (likely(PyLong_Check(n_arg))) {
-                Py_ssize_t long_arg_size = Py_SIZE(n_arg);
-                digit *ob_digit;
-                switch (long_arg_size) {
-                case 0:
-                    n = 0;
-                    break;
-                case 1:
+                const Py_ssize_t long_arg_size = Py_SIZE(n_arg);
+                if (likely(long_arg_size == 1)) {
                     n = ((PyLongObject *)n_arg)->ob_digit[0];
-                    break;
-                case 2:
-                    ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                    n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
-#if SIZEOF_SIZE_T == 8
-                    break;
-                case 3:
-                    ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                    n_temp = ((size_t)ob_digit[0]
-                              | (((size_t)ob_digit[1]
-                                  | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
-#endif
-                    if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
-#if SIZEOF_SIZE_T == 8
-                                 ob_digit[2] >= 8))
-#else
-                                 ob_digit[1] >= 2))
-#endif
-                    {
+                }
+                else if (long_arg_size == 0) {
+                    n = 0;
+                }
+                else {
+                    const digit *ob_digit = ((PyLongObject *)n_arg)->ob_digit;
+                    switch (long_arg_size) {
+                    case 2:
+                        n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
+    #if SIZEOF_SIZE_T == 8
+                        break;
+                    case 3:
+                        n_temp = ((size_t)ob_digit[0]
+                                  | (((size_t)ob_digit[1]
+                                      | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
+    #endif
+                        if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
+    #if SIZEOF_SIZE_T == 8
+                                     ob_digit[2] >= 8))
+    #else
+                                     ob_digit[1] >= 2))
+    #endif
+                        {
+                            goto overflow_error;
+                        }
+                        n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
+                        break;
+                    default:
                         goto overflow_error;
                     }
-                    n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
-                    break;
-                default:
-                    goto overflow_error;
                 }
             }
             else if (n_arg == Py_None) {
@@ -1435,42 +1435,43 @@ fast_itertools_chunked_even(PyObject *self,
         n_given = 1;
         n_arg = args[1];
         if (likely(PyLong_Check(n_arg))) {
-            Py_ssize_t long_arg_size = Py_SIZE(n_arg);
-            digit *ob_digit;
-            switch (long_arg_size) {
-            case 0:
+            const Py_ssize_t long_arg_size = Py_SIZE(n_arg);
+            if (likely(long_arg_size == 1)) {
+                n = ((PyLongObject *)n_arg)->ob_digit[0];
+            }
+            else if (long_arg_size == 0) {
                 PyErr_Format(PyExc_ZeroDivisionError,
                              "'n' argument for fast_itertools.chunked_even() cannot "
                              "be zero (must be None or 1 <= n <= %zd)",
                              PY_SSIZE_T_MAX);
                 goto error;
-            case 1:
-                n = ((PyLongObject *)n_arg)->ob_digit[0];
-                break;
-            case 2:
-                ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
+            }
+            else {
+                const digit *ob_digit = ((PyLongObject *)n_arg)->ob_digit;
+                switch (long_arg_size) {
+                case 2:
+                    n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
 #if SIZEOF_SIZE_T == 8
-                break;
-            case 3:
-                ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                n_temp = ((size_t)ob_digit[0]
-                          | (((size_t)ob_digit[1]
-                              | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
+                    break;
+                case 3:
+                    n_temp = ((size_t)ob_digit[0]
+                              | (((size_t)ob_digit[1]
+                                  | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
 #endif
-                if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
+                    if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
 #if SIZEOF_SIZE_T == 8
-                             ob_digit[2] >= 8))
+                                 ob_digit[2] >= 8))
 #else
-                             ob_digit[1] >= 2))
+                                 ob_digit[1] >= 2))
 #endif
-                {
+                    {
+                        goto overflow_error;
+                    }
+                    n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
+                    break;
+                default:
                     goto overflow_error;
                 }
-                n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
-                break;
-            default:
-                goto overflow_error;
             }
         }
         else if (n_arg == Py_None) {
@@ -1518,42 +1519,43 @@ fast_itertools_chunked_even(PyObject *self,
             }
             n_arg = args[nargs + i];
             if (likely(PyLong_Check(n_arg))) {
-                Py_ssize_t long_arg_size = Py_SIZE(n_arg);
-                digit *ob_digit;
-                switch (long_arg_size) {
-                case 0:
+                const Py_ssize_t long_arg_size = Py_SIZE(n_arg);
+                if (likely(long_arg_size == 1)) {
+                    n = ((PyLongObject *)n_arg)->ob_digit[0];
+                }
+                else if (long_arg_size == 0) {
                     PyErr_Format(PyExc_ZeroDivisionError,
                                  "'n' argument for fast_itertools.chunked_even() cannot "
                                  "be zero (must be None or 1 <= n <= %zd)",
                                  PY_SSIZE_T_MAX);
                     goto error;
-                case 1:
-                    n = ((PyLongObject *)n_arg)->ob_digit[0];
-                    break;
-                case 2:
-                    ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                    n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
-#if SIZEOF_SIZE_T == 8
-                    break;
-                case 3:
-                    ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                    n_temp = ((size_t)ob_digit[0]
-                              | (((size_t)ob_digit[1]
-                                  | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
-#endif
-                    if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
-#if SIZEOF_SIZE_T == 8
-                                 ob_digit[2] >= 8))
-#else
-                                 ob_digit[1] >= 2))
-#endif
-                    {
+                }
+                else {
+                    const digit *ob_digit = ((PyLongObject *)n_arg)->ob_digit;
+                    switch (long_arg_size) {
+                    case 2:
+                        n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
+    #if SIZEOF_SIZE_T == 8
+                        break;
+                    case 3:
+                        n_temp = ((size_t)ob_digit[0]
+                                  | (((size_t)ob_digit[1]
+                                      | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
+    #endif
+                        if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
+    #if SIZEOF_SIZE_T == 8
+                                     ob_digit[2] >= 8))
+    #else
+                                     ob_digit[1] >= 2))
+    #endif
+                        {
+                            goto overflow_error;
+                        }
+                        n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
+                        break;
+                    default:
                         goto overflow_error;
                     }
-                    n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
-                    break;
-                default:
-                    goto overflow_error;
                 }
             }
             else if (n_arg == Py_None) {
@@ -1854,39 +1856,39 @@ fast_itertools_sliced(PyObject *self,
         n_given = 1;
         n_arg = args[1];
         if (likely(PyLong_Check(n_arg))) {
-            Py_ssize_t long_arg_size = Py_SIZE(n_arg);
-            digit *ob_digit;
-            switch (long_arg_size) {
-            case 0:
-                n = 0;
-                break;
-            case 1:
+            const Py_ssize_t long_arg_size = Py_SIZE(n_arg);
+            if (likely(long_arg_size == 1)) {
                 n = ((PyLongObject *)n_arg)->ob_digit[0];
-                break;
-            case 2:
-                ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
+            }
+            else if (long_arg_size == 0) {
+                n = 0;
+            }
+            else {
+                const digit *ob_digit = ((PyLongObject *)n_arg)->ob_digit;
+                switch (long_arg_size) {
+                case 2:
+                    n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
 #if SIZEOF_SIZE_T == 8
-                break;
-            case 3:
-                ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                n_temp = ((size_t)ob_digit[0]
-                          | (((size_t)ob_digit[1]
-                              | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
+                    break;
+                case 3:
+                    n_temp = ((size_t)ob_digit[0]
+                              | (((size_t)ob_digit[1]
+                                  | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
 #endif
-                if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
+                    if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
 #if SIZEOF_SIZE_T == 8
-                             ob_digit[2] >= 8))
+                                 ob_digit[2] >= 8))
 #else
-                             ob_digit[1] >= 2))
+                                 ob_digit[1] >= 2))
 #endif
-                {
+                    {
+                        goto overflow_error;
+                    }
+                    n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
+                    break;
+                default:
                     goto overflow_error;
                 }
-                n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
-                break;
-            default:
-                goto overflow_error;
             }
         }
         else if (n_arg == Py_None) {
@@ -1940,39 +1942,39 @@ fast_itertools_sliced(PyObject *self,
             }
             n_arg = args[nargs + i];
             if (likely(PyLong_Check(n_arg))) {
-                Py_ssize_t long_arg_size = Py_SIZE(n_arg);
-                digit *ob_digit;
-                switch (long_arg_size) {
-                case 0:
-                    n = 0;
-                    break;
-                case 1:
+                const Py_ssize_t long_arg_size = Py_SIZE(n_arg);
+                if (likely(long_arg_size == 1)) {
                     n = ((PyLongObject *)n_arg)->ob_digit[0];
-                    break;
-                case 2:
-                    ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                    n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
+                }
+                else if (long_arg_size == 0) {
+                    n = 0;
+                }
+                else {
+                    const digit *ob_digit = ((PyLongObject *)n_arg)->ob_digit;
+                    switch (long_arg_size) {
+                    case 2:
+                        n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
 #if SIZEOF_SIZE_T == 8
-                    break;
-                case 3:
-                    ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                    n_temp = ((size_t)ob_digit[0]
-                              | (((size_t)ob_digit[1]
-                                  | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
+                        break;
+                    case 3:
+                        n_temp = ((size_t)ob_digit[0]
+                                  | (((size_t)ob_digit[1]
+                                      | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
 #endif
-                    if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
-#if SIZEOF_SIZE_T == 8
-                                 ob_digit[2] >= 8))
+                        if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
+ #if SIZEOF_SIZE_T == 8
+                                     ob_digit[2] >= 8))
 #else
-                                 ob_digit[1] >= 2))
+                                     ob_digit[1] >= 2))
 #endif
-                    {
+                        {
+                            goto overflow_error;
+                        }
+                        n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
+                        break;
+                    default:
                         goto overflow_error;
                     }
-                    n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
-                    break;
-                default:
-                    goto overflow_error;
                 }
             }
             else if (n_arg == Py_None) {
@@ -2174,7 +2176,7 @@ fast_itertools_take(PyObject *self,
     void *kwname_data;
     int iterable_given = 0, n_given = 0, is_list = 0;
     int cmp0, cmp1;
-    Py_ssize_t i, j, n, m, kwname_length, nkwargs = 0, largs = nargs;
+    Py_ssize_t i, j, n, kwname_length, nkwargs = 0, largs = nargs;
     size_t n_temp, size;
 
     if (kwnames) {
@@ -2194,39 +2196,39 @@ fast_itertools_take(PyObject *self,
         n_given = 1;
         n_arg = args[1];
         if (likely(PyLong_Check(n_arg))) {
-            Py_ssize_t long_arg_size = Py_SIZE(n_arg);
-            digit *ob_digit;
-            switch (long_arg_size) {
-            case 0:
-                n = 0;
-                break;
-            case 1:
+            const Py_ssize_t long_arg_size = Py_SIZE(n_arg);
+            if (likely(long_arg_size == 1)) {
                 n = ((PyLongObject *)n_arg)->ob_digit[0];
-                break;
-            case 2:
-                ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
+            }
+            else if (long_arg_size == 0) {
+                return PyList_New(0);
+            }
+            else {
+                const digit *ob_digit = ((PyLongObject *)n_arg)->ob_digit;
+                switch (long_arg_size) {
+                case 2:
+                    n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
 #if SIZEOF_SIZE_T == 8
-                break;
-            case 3:
-                ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                n_temp = ((size_t)ob_digit[0]
-                          | (((size_t)ob_digit[1]
-                              | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
+                    break;
+                case 3:
+                    n_temp = ((size_t)ob_digit[0]
+                              | (((size_t)ob_digit[1]
+                                  | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
 #endif
-                if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
+                    if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
 #if SIZEOF_SIZE_T == 8
-                             ob_digit[2] >= 8))
+                                 ob_digit[2] >= 8))
 #else
-                             ob_digit[1] >= 2))
+                                 ob_digit[1] >= 2))
 #endif
-                {
+                    {
+                        goto overflow_error;
+                    }
+                    n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
+                    break;
+                default:
                     goto overflow_error;
                 }
-                n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
-                break;
-            default:
-                goto overflow_error;
             }
         }
         else if (n_arg == Py_None) {
@@ -2272,39 +2274,39 @@ fast_itertools_take(PyObject *self,
             }
             n_arg = args[nargs + i];
             if (likely(PyLong_Check(n_arg))) {
-                Py_ssize_t long_arg_size = Py_SIZE(n_arg);
-                digit *ob_digit;
-                switch (long_arg_size) {
-                case 0:
-                    n = 0;
-                    break;
-                case 1:
+                const Py_ssize_t long_arg_size = Py_SIZE(n_arg);
+                if (likely(long_arg_size == 1)) {
                     n = ((PyLongObject *)n_arg)->ob_digit[0];
-                    break;
-                case 2:
-                    ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                    n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
+                }
+                else if (long_arg_size == 0) {
+                    return PyList_New(0);
+                }
+                else {
+                    const digit *ob_digit = ((PyLongObject *)n_arg)->ob_digit;
+                    switch (long_arg_size) {
+                    case 2:
+                        n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
 #if SIZEOF_SIZE_T == 8
-                    break;
-                case 3:
-                    ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                    n_temp = ((size_t)ob_digit[0]
-                              | (((size_t)ob_digit[1]
-                                  | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
+                        break;
+                    case 3:
+                        n_temp = ((size_t)ob_digit[0]
+                                  | (((size_t)ob_digit[1]
+                                      | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
 #endif
-                    if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
-#if SIZEOF_SIZE_T == 8
-                                 ob_digit[2] >= 8))
+                        if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
+ #if SIZEOF_SIZE_T == 8
+                                     ob_digit[2] >= 8))
 #else
-                                 ob_digit[1] >= 2))
+                                     ob_digit[1] >= 2))
 #endif
-                    {
+                        {
+                            goto overflow_error;
+                        }
+                        n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
+                        break;
+                    default:
                         goto overflow_error;
                     }
-                    n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
-                    break;
-                default:
-                    goto overflow_error;
                 }
             }
             else if (n_arg == Py_None) {
@@ -2328,11 +2330,13 @@ fast_itertools_take(PyObject *self,
     }
     i = j = 0;
 #define RES_INIT(x) \
-    m = (x); \
-    n = Py_MIN(n, m); \
+    n = Py_MIN(n, (x)); \
     res = PyList_New(n); \
     if (unlikely(res == NULL)) { \
         goto error; \
+    } \
+    else if (unlikely(n == 0)) { \
+        return res; \
     } \
     res_items = ((PyListObject *)res)->ob_item;
     if (likely((iterabletype = Py_TYPE(iterable)) == list_type || iterabletype == tuple_type)) {
@@ -2553,9 +2557,31 @@ fast_itertools_take(PyObject *self,
         }
     }
     else {
-        res = PySequence_List(iterable);
+        res = PyList_New(n);
         if (unlikely(res == NULL)) {
             goto error;
+        }
+        res_items = ((PyListObject *)res)->ob_item;
+        iterable = PyObject_GetIter(iterable);
+        if (unlikely(iterable == NULL)) {
+            goto error;
+        }
+        iternextfunc it = Py_TYPE(iterable)->tp_iternext;
+        for (; likely(i < n); i++) {
+            PyObject *item = it(iterable);
+            if (unlikely(item == NULL)) {
+                PyThreadState *tstate = _PyThreadState_GET();
+                PyObject *exc;
+                if ((exc = _PyErr_Occurred(tstate)) == NULL || exc &&
+                    PyErr_GivenExceptionMatches(exc, PyExc_StopIteration))
+                {
+                    _PyErr_Restore(tstate, NULL, NULL, NULL);
+                    Py_SET_SIZE(res, i);
+                    break;
+                }
+                goto error;
+            }
+            res_items[i] = item;
         }
     }
   finn:
