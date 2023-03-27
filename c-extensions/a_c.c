@@ -11,6 +11,9 @@
 #include <stdint.h>
 #include <string.h>
 
+#define unlikely(x) __builtin_expect((x), 0)
+#define likely(x) __builtin_expect((x), 1)
+
 static inline PyTupleObject *
 tuple_alloc_unsafe(Py_ssize_t size)
 {
@@ -122,6 +125,218 @@ a_c_something_safe2(PyObject *self, PyObject *x)
         return NULL;
     }
     return tup;
+}
+
+static binaryfunc long_mul;
+static PyTypeObject *long_type;
+static PyObject *one;
+
+static inline int
+int_inc(PyObject **x)
+{
+    int carry = 1;
+    digit *digits = ((PyLongObject *)*x)->ob_digit;
+    Py_ssize_t i, size = Py_SIZE(*x);
+    for (i = 0; i < size && carry; ++i) {
+        if (digits[i] < PyLong_MASK) {
+            digits[i] += 1;
+            if (unlikely(i > 0)) {
+                memset(digits, 0, sizeof(digit) * i);
+            }
+            return 1;
+        }
+    }
+
+    PyLongObject *temp = _PyLong_New(size + 1);
+    if (unlikely(temp == NULL)) return 0;
+    digits = temp->ob_digit;
+    memset(digits, 0, sizeof(digit) * size);
+    digits[size] = 1;
+    *x = (PyObject *)temp;
+    return 1;
+}
+
+static PyObject *
+a_c_factorial(PyObject *self, PyObject *x)
+{
+    size_t partial, n, n_part, j, i, c;
+    int large_fact = 0;
+    PyObject *res, *temp, *temp2;
+
+    if (__builtin_expect(Py_TYPE(x) == long_type, 1)) {
+        const Py_ssize_t long_arg_size = Py_SIZE(x);
+        if (likely(long_arg_size == 1)) {
+            n = ((PyLongObject *)x)->ob_digit[0];
+        }
+        else if (long_arg_size == 0) {
+            n = 1;
+        }
+        else {
+            const digit *ob_digit = ((PyLongObject *)x)->ob_digit;;
+            switch (long_arg_size) {
+            case 2:
+                n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
+#if SIZEOF_SIZE_T == 8
+                break;
+            case 3:
+                n = ((size_t)ob_digit[0]
+                     | (((size_t)ob_digit[1]
+                         | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
+#endif
+                if (unlikely(
+#if SIZEOF_SIZE_T == 8
+                             ob_digit[2] >= 16))
+#else
+                             ob_digit[1] >= 4))
+#endif
+                {
+                    large_fact = 1;
+                    n = SIZE_MAX;
+                }
+                break;
+            default:
+                if (likely(long_arg_size > 0)) {
+                    large_fact = 1;
+                    n = SIZE_MAX;
+                    break;
+                }
+                n = 1;
+                break;
+            }
+        }
+    }
+    else {
+        PyErr_SetString(PyExc_TypeError,
+                        "non-int passed to a_c.something_safe2()");
+        return NULL;
+    }
+
+#define LIMITED_FACTORIAL(c) \
+    partial = i; \
+    if (n < c) { \
+        for (; ++i < n;) partial *= i; \
+        temp = PyLong_FromSize_t(partial); \
+        if (unlikely(temp == NULL)) goto error; \
+        temp2 = long_mul(res, temp); \
+        Py_DECREF(res); \
+        Py_DECREF(temp); \
+        if (unlikely(temp2 == NULL)) return NULL; \
+        return temp2; \
+    } \
+    else { \
+        for (; ++i < c;) partial *= i; \
+        temp = PyLong_FromSize_t(partial); \
+        if (unlikely(temp == NULL)) goto error; \
+        temp2 = long_mul(res, temp); \
+        Py_DECREF(res); \
+        Py_DECREF(temp); \
+        if (unlikely(temp2 == NULL)) return NULL; \
+        res = temp2; \
+    } \
+
+    if (n < 21) {
+        partial = n;
+        for (i = 1; ++i < n;) partial *= i;
+        res = PyLong_FromSize_t(partial);
+        if (unlikely(res == NULL)) goto error;
+        return res;
+    }
+    else {
+        i = 21;
+        res = PyLong_FromSize_t(2432902008176640000ULL);
+        if (unlikely(res == NULL)) goto error;
+    }
+
+    LIMITED_FACTORIAL(34)
+
+    LIMITED_FACTORIAL(46)
+
+    LIMITED_FACTORIAL(57)
+
+    LIMITED_FACTORIAL(67)
+    LIMITED_FACTORIAL(77)
+    LIMITED_FACTORIAL(87)
+
+    LIMITED_FACTORIAL(96)
+    LIMITED_FACTORIAL(105)
+    LIMITED_FACTORIAL(114)
+    LIMITED_FACTORIAL(123)
+    LIMITED_FACTORIAL(132)
+    LIMITED_FACTORIAL(141)
+
+#define REPEATED_FACTORIAL(delta, rep) \
+    for (j = 0; j < rep; ++j) { \
+        c += delta; \
+        LIMITED_FACTORIAL(c); \
+    } \
+
+    c = 141;
+
+    REPEATED_FACTORIAL(8, 14)
+    REPEATED_FACTORIAL(7, 45)
+    REPEATED_FACTORIAL(6, 176)
+    REPEATED_FACTORIAL(5, 1102)
+    REPEATED_FACTORIAL(4, 14601)
+    REPEATED_FACTORIAL(3, 858903)
+    REPEATED_FACTORIAL(2, 165546190) /* tested value only */
+
+#undef REPEATED_FACTORIAL
+#undef LLIMITED_FACTORIAL
+
+    temp = PyLong_FromSize_t(c);
+    if (unlikely(temp == NULL)) goto error;
+    n_part = Py_MIN(n, SIZE_MAX);
+    for (; c < n_part; ++c) {
+        temp2 = long_mul(res, temp);
+        Py_DECREF(res);
+        if (unlikely(temp2 == NULL)) {
+            Py_DECREF(temp);
+            return NULL;
+        }
+        res = temp2;
+        if (unlikely(!int_inc(&temp))) {
+            Py_DECREF(temp);
+            return NULL;
+        }
+    }
+    if (unlikely(large_fact)) {
+        const Py_ssize_t x_size = Py_SIZE(x);
+        while (true) {
+            temp2 = long_mul(res, temp);
+            Py_DECREF(res);
+            if (unlikely(temp2 == NULL)) {
+                Py_DECREF(temp);
+                return NULL;
+            }
+            res = temp2;
+            if (unlikely(!int_inc(&temp))) {
+                Py_DECREF(temp);
+                return NULL;
+            }
+            if (x_size > Py_SIZE(temp)) {
+                continue;
+            }
+            else if (x_size == Py_SIZE(temp)) {
+                int status = PyObject_RichCompareBool(x, temp, Py_EQ);
+                if (!status) {
+                    continue;
+                }
+                Py_DECREF(temp);
+                if (status) break;
+                goto error;
+            }
+        }
+    }
+
+    temp2 = long_mul(res, x);
+    Py_DECREF(res);
+    if (unlikely(temp2 == NULL)) {
+        return NULL;
+    }
+    return temp2;
+  error:
+    Py_DECREF(res);
+    return NULL;
 }
 
 static PyObject *
@@ -309,8 +524,6 @@ typedef struct {
     PyObject *step;
     PyObject *length;
 } rangeobject;
-
-static PyObject *one;
 
 static PyObject *
 a_c_compute_range_length(PyObject *self,
@@ -1251,7 +1464,7 @@ a_c_bitwise_in(PyObject *self,
     Py_RETURN_FALSE;
 }
 
-static binaryfunc *long_mod;
+static binaryfunc long_mod;
 
 static Py_ssize_t
 long_compare(PyLongObject *a, PyLongObject *b)
@@ -2441,6 +2654,7 @@ static PyMethodDef A_CMethods[] = {
     METH_O_NODOC(something_unsafe1)
     METH_O_NODOC(something_unsafe2)
     METH_O_NODOC(test_refcnt)
+    METH_O_NODOC(factorial)
     
     METH_FASTCALL_KEYWORDS_NODOC(hello)
     METH_FASTCALL_KEYWORDS_NODOC(fast_min)
@@ -2474,7 +2688,9 @@ PyInit_a_c(void)
     one = (PyObject *)&_PyLong_SMALL_INTS[_PY_NSMALLNEGINTS+1];
     false_or_true[0] = Py_False;
     false_or_true[1] = Py_True;
-    long_mod = &PyLong_Type.tp_as_number->nb_remainder;
+    long_mod = PyLong_Type.tp_as_number->nb_remainder;
+    long_mul = PyLong_Type.tp_as_number->nb_multiply;
+    long_type = &PyLong_Type;
     pytype_str = Py_TYPE(PyUnicode_New(0, 255));
     return PyModule_Create(&a_cmodule);
 }
