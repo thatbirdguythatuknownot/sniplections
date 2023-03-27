@@ -229,7 +229,7 @@ fast_itertools_chunked(PyObject *self,
 #endif
                 if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
 #if SIZEOF_SIZE_T == 8
-                             ob_digit[2] >= 4))
+                             ob_digit[2] >= 8))
 #else
                              ob_digit[1] >= 2))
 #endif
@@ -321,7 +321,7 @@ fast_itertools_chunked(PyObject *self,
 #endif
                     if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
 #if SIZEOF_SIZE_T == 8
-                                 ob_digit[2] >= 4))
+                                 ob_digit[2] >= 8))
 #else
                                  ob_digit[1] >= 2))
 #endif
@@ -582,7 +582,7 @@ ichunk__new__(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 #endif
                     if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
 #if SIZEOF_SIZE_T == 8
-                                 ob_digit[2] >= 4))
+                                 ob_digit[2] >= 8))
 #else
                                  ob_digit[1] >= 2))
 #endif
@@ -791,7 +791,7 @@ ichunk_setstate(ichunkobject *o, PyObject *num)
 #endif
         if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
 #if SIZEOF_SIZE_T == 8
-                     ob_digit[2] >= 4))
+                     ob_digit[2] >= 8))
 #else
                      ob_digit[1] >= 2))
 #endif
@@ -910,7 +910,7 @@ fast_itertools_ichunked(PyObject *self,
 #endif
                 if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
 #if SIZEOF_SIZE_T == 8
-                             ob_digit[2] >= 4))
+                             ob_digit[2] >= 8))
 #else
                              ob_digit[1] >= 2))
 #endif
@@ -994,7 +994,7 @@ fast_itertools_ichunked(PyObject *self,
 #endif
                     if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
 #if SIZEOF_SIZE_T == 8
-                                 ob_digit[2] >= 4))
+                                 ob_digit[2] >= 8))
 #else
                                  ob_digit[1] >= 2))
 #endif
@@ -1460,7 +1460,7 @@ fast_itertools_chunked_even(PyObject *self,
 #endif
                 if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
 #if SIZEOF_SIZE_T == 8
-                             ob_digit[2] >= 4))
+                             ob_digit[2] >= 8))
 #else
                              ob_digit[1] >= 2))
 #endif
@@ -1551,7 +1551,7 @@ fast_itertools_chunked_even(PyObject *self,
 #endif
                     if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
 #if SIZEOF_SIZE_T == 8
-                                 ob_digit[2] >= 4))
+                                 ob_digit[2] >= 8))
 #else
                                  ob_digit[1] >= 2))
 #endif
@@ -1884,7 +1884,7 @@ fast_itertools_sliced(PyObject *self,
 #endif
                 if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
 #if SIZEOF_SIZE_T == 8
-                             ob_digit[2] >= 4))
+                             ob_digit[2] >= 8))
 #else
                              ob_digit[1] >= 2))
 #endif
@@ -1978,7 +1978,7 @@ fast_itertools_sliced(PyObject *self,
 #endif
                     if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
 #if SIZEOF_SIZE_T == 8
-                                 ob_digit[2] >= 4))
+                                 ob_digit[2] >= 8))
 #else
                                  ob_digit[1] >= 2))
 #endif
@@ -2232,7 +2232,7 @@ fast_itertools_take(PyObject *self,
 #endif
                 if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
 #if SIZEOF_SIZE_T == 8
-                             ob_digit[2] >= 4))
+                             ob_digit[2] >= 8))
 #else
                              ob_digit[1] >= 2))
 #endif
@@ -2317,7 +2317,7 @@ fast_itertools_take(PyObject *self,
 #endif
                     if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
 #if SIZEOF_SIZE_T == 8
-                                 ob_digit[2] >= 4))
+                                 ob_digit[2] >= 8))
 #else
                                  ob_digit[1] >= 2))
 #endif
@@ -2358,9 +2358,9 @@ fast_itertools_take(PyObject *self,
         goto error; \
     } \
     res_items = ((PyListObject *)res)->ob_item;
-    if (likely((is_list = (iterabletype = Py_TYPE(iterable)) == list_type) || iterabletype == tuple_type)) {
+    if (likely((iterabletype = Py_TYPE(iterable)) == list_type || iterabletype == tuple_type)) {
         RES_INIT(Py_SIZE(iterable));
-        PyObject **iterable_items = is_list ? ((PyListObject *)iterable)->ob_item : ((PyTupleObject *)iterable)->ob_item;
+        PyObject **iterable_items = ((PyListObject *)iterable)->ob_item;
         for (; likely(i < n); ++i) {
             Py_XINCREF(iterable_items[i]);
             res_items[i] = iterable_items[i];
