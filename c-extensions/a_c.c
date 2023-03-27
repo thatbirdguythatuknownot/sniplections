@@ -278,7 +278,7 @@ a_c_factorial(PyObject *self, PyObject *x)
     REPEATED_FACTORIAL(5, 1102)
     REPEATED_FACTORIAL(4, 14601)
     REPEATED_FACTORIAL(3, 858903)
-    REPEATED_FACTORIAL(2, 165546190) /* tested value only */
+    REPEATED_FACTORIAL(2, 2146162525ULL) /* tested value only */
 
 #undef REPEATED_FACTORIAL
 #undef LLIMITED_FACTORIAL
