@@ -936,6 +936,9 @@ fast_itertools_ichunked(PyObject *self,
     case 1:
         iterable_given = 1;
         iterable = PyObject_GetIter(args[0]);
+        if (unlikely(iterable == NULL)) {
+            goto error;
+        }
         break;
     }
 
@@ -952,6 +955,9 @@ fast_itertools_ichunked(PyObject *self,
                 goto error;
             }
             iterable = PyObject_GetIter(args[nargs + i]);
+            if (unlikely(iterable == NULL)) {
+                goto error;
+            }
         }
         else if (likely(
                     kwname_length == 1 &&
