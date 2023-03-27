@@ -156,6 +156,8 @@ int_inc(PyObject **x)
     return 1;
 }
 
+static PyObject *small_fact_lut[21];
+
 static PyObject *
 a_c_factorial(PyObject *self, PyObject *x)
 {
@@ -235,16 +237,11 @@ a_c_factorial(PyObject *self, PyObject *x)
     } \
 
     if (n < 21) {
-        partial = n;
-        for (i = 1; ++i < n;) partial *= i;
-        res = PyLong_FromSize_t(partial);
-        if (unlikely(res == NULL)) goto error;
-        return res;
+        return Py_NewRef(small_fact_lut[n]);
     }
     else {
         i = 21;
-        res = PyLong_FromSize_t(2432902008176640000ULL);
-        if (unlikely(res == NULL)) goto error;
+        res = Py_NewRef(small_fact_lut[20]);
     }
 
     LIMITED_FACTORIAL(34)
@@ -2673,12 +2670,29 @@ static PyMethodDef A_CMethods[] = {
 PyDoc_STRVAR(a_c___doc__,
              "Cython vs C extensions testing");
 
+static int
+a_c_clear(PyObject *mod)
+{
+    for (size_t i = 0; i < 21; i++) {
+        Py_CLEAR(small_fact_lut[i]);
+    }
+    return 0;
+}
+
+static void
+a_c_free(void *mod)
+{
+    (void)a_c_clear((PyObject *)mod);
+}
+
 static struct PyModuleDef a_cmodule = {
     PyModuleDef_HEAD_INIT,
     "a_c",
     a_c___doc__,
     -1,
     A_CMethods,
+    .m_clear = a_c_clear,
+    .m_free = a_c_free,
 };
 
 PyMODINIT_FUNC
@@ -2686,11 +2700,23 @@ PyInit_a_c(void)
 {
     zero = (PyObject *)&_PyLong_SMALL_INTS[_PY_NSMALLNEGINTS];
     one = (PyObject *)&_PyLong_SMALL_INTS[_PY_NSMALLNEGINTS+1];
+    Py_INCREF(one);
+    Py_INCREF(one);
+    small_fact_lut[0] = small_fact_lut[1] = one;
     false_or_true[0] = Py_False;
     false_or_true[1] = Py_True;
     long_mod = PyLong_Type.tp_as_number->nb_remainder;
     long_mul = PyLong_Type.tp_as_number->nb_multiply;
     long_type = &PyLong_Type;
     pytype_str = Py_TYPE(PyUnicode_New(0, 255));
+    size_t x = 1;
+    for (size_t i = 2; i < 21; ++i) {
+        small_fact_lut[i] = PyLong_FromSize_t(x *= i);
+        if (unlikely(small_fact_lut[i] == NULL)) {
+            while (--i >= 0) {
+                Py_DECREF(small_fact_lut[i]);
+            }
+        }
+    }
     return PyModule_Create(&a_cmodule);
 }
