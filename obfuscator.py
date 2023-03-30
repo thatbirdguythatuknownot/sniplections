@@ -55,8 +55,8 @@ from functools import cache, reduce
 from math import log2, trunc
 from itertools import product
 
-version = version_info.major + version_info.minor / 100
-if version < 3.11:
+IS_311 = version_info >= (3, 11)
+if not IS_311:
     print("\nThis obfuscator was primarily written for Python3.11, and some things may not work correctly in earlier versions.\n")
     warn(FutureWarning("use 3.11 or stuff might not work"))
 
@@ -144,7 +144,7 @@ class Obfuscator:
         dict: "__annotations__.__class__",
         True: "__name__.__eq__(__name__)",
         False: "__name__.__ne__(__name__)",
-        None: "__name__.__getstate__()" if version >= 3.11 else ("({0}:=__name__.__class__.__base__.__base__)", (), (), ()),
+        None: "__name__.__getstate__()" if IS_311 else ("({0}:=__name__.__class__.__base__.__base__)", (), (), ()),
         list: ("({0}:=__name__.__dir__().__class__)", (), (), ()),
         tuple: ("({0}:=__name__.__class__.__bases__.__class__)", (), (), ()),
         object: ("({0}:=__name__.__class__.__base__)", (), (), ()),
@@ -171,7 +171,7 @@ class Obfuscator:
         dict: "__annotations__.__class__",
         True: "__name__.__eq__(__name__)",
         False: "__name__.__ne__(__name__)",
-        None: "__name__.__getstate__()" if version >= 3.11 else "__name__.__class__.__base__.__base__",
+        None: "__name__.__getstate__()" if IS_311 else "__name__.__class__.__base__.__base__",
         list: "__name__.__dir__().__class__",
         tuple: "__name__.__class__.__bases__.__class__",
         object: "__name__.__class__.__base__",
