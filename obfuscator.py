@@ -53,6 +53,7 @@ from fractions import Fraction
 from builtins import *
 from functools import cache, reduce
 from math import log2, trunc
+from itertools import product
 
 version = version_info.major + version_info.minor / 100
 if version < 3.11:
@@ -520,6 +521,21 @@ class Obfuscator:
             self.cache = self._default_cache_W.copy()
             self._nonassigned = self._default_nonassigned.copy()
         self.ge_cache = no_hash_dict(self.object_repr_pair)
+
+class Owobfuscwatwor(Obfuscator):
+    def __init__(self, taken=None):
+        super().__init__(taken)
+        if not self.no_walrus:
+            self.owo_names = product('wWmM', 'oODuUvVTQ', 'oOD0uUvVTQ')
+    def nnu(self):
+        for b, a, c in self.owo_names:
+            if (name := a + b + c) not in self.taken:
+                break
+        return name
+    def c(self):
+        super().c()
+        if not self.no_walrus:
+            self.owo_names = product('wWmM', 'oODuUvVTQ', 'oOD0uUvVTQ')
 
 builtins_dict = __builtins__.__dict__
 
