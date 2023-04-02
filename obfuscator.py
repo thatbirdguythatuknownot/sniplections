@@ -592,6 +592,11 @@ class UnparseObfuscate(_Unparser):
         self._unparser = _Unparser()
         init_obfuscator.__init__(self, taken)
     
+    def o(self, s):
+        """.o(): obfuscate
+        Obfuscate a string."""
+        return self.visit(parse(s))
+    
     def not_implemented(self, node):
         print(f"""<string>:Line {node.lineno}{
                 f' -> Line {node.end_lineno}'
@@ -745,7 +750,7 @@ class UnparseObfuscate(_Unparser):
             res = ''.join(buffer)
             name = self.get_name(t.id)
             hasattr_s = self.ge(hasattr)
-            if self.ident_check(hasattr_s):
+            if self.ident_check(hasattr_s[0]):
                 hasattr_s = f" {hasattr_s}"
             self.write(f"({name}:={name}.{dunder}({rhs})if{hasattr_s}({res},{self.gs(dunder)})else {name}.{bindunder}({rhs}))")
             self.unparse_cache[t] = self.unparse_cache[t.id] = name
