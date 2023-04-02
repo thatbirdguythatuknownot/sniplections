@@ -568,6 +568,7 @@ builtins_dict = __builtins__.__dict__
 # literally just fix all those and this is fine but i can't do it easily
 class UnparseObfuscate(_Unparser):
     type_cache = {}
+    
     def __new__(cls, taken=None, *, init_obfuscator=Obfuscator):
         tup_classes = (cls, init_obfuscator)
         typ = cls.type_cache.get(tup_classes)
@@ -577,6 +578,7 @@ class UnparseObfuscate(_Unparser):
             typ = cls.type_cache[tup_classes] = UnparserObfuscator
         inst = super().__new__(typ)
         return inst
+    
     def __init__(self, taken=None, *, init_obfuscator=Obfuscator):
         self._source = []
         self._precedences = {}
@@ -601,6 +603,12 @@ class UnparseObfuscate(_Unparser):
                 ''
               }: .visit_{(name := type(node).__name__)}() is not implemented""")
         return getattr(self._unparser, f"visit_{name}", self._unparser.generic_visit)(node)
+    
+    def cvt_names(self, *names):
+        t = []
+        for name in names:
+            t.append(self.name_to_taken.get(name, name))
+        return t
     
     def get_name(self, id='', override=None, store=True):
         if not id:
@@ -719,19 +727,27 @@ class UnparseObfuscate(_Unparser):
         return self.not_implemented(node)
     
     def visit_AugAssign(self, node):
+        if self._source:
+            self.write("\n")
         if self.no_walrus:
             return self.not_implemented(node)
-        dunder = f"__i{self.bindunder[node.op.__class__.__name__][2:]}"
+        bindunder = self.bindunder[node.op.__class__.__name__]
+        dunder = f"__i{bindunder[2:]}"
         self.set_precedence(_Precedence.NAMED_EXPR, node.value)
         with self.buffered() as buffer:
             self.traverse(node.value)
         rhs = ''.join(buffer)
         if isinstance(t:=node.target, Name):
             with self.buffered() as buffer:
-                self.visit(Name(t.id, ctx=Load()))
-                self.visit(t)
-            res, name = buffer
-            self.write(f"({name}:={res}.{dunder}({rhs}))")
+                node = Name(t.id, ctx=Load())
+                self.set_precedence(node, _Precedence.NAMED_EXPR)
+                self.traverse(node)
+            res = ''.join(buffer)
+            name = self.get_name(t.id)
+            hasattr_s = self.ge(hasattr)
+            if self.ident_check(hasattr_s):
+                hasattr_s = f" {hasattr_s}"
+            self.write(f"({name}:={name}.{dunder}({rhs})if{hasattr_s}({res},{self.gs(dunder)})else {name}.{bindunder}({rhs}))")
             self.unparse_cache[t] = self.unparse_cache[t.id] = name
             return
         self.set_precedence(_Precedence.TUPLE, t.value)
