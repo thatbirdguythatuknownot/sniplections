@@ -1268,7 +1268,17 @@ class UnparseObfuscate(_Unparser):
     def visit_Ellipsis(self, node):
         self.write(self.ge(...))
     
-    visit_Slice = not_implemented
+    def visit_Slice(self, node):
+        slice_s = self.ge(slice)
+        with self.delimit(f"{slice_s}(", ")"):
+            self.set_precedence(_Precedence.NAMED_EXPR, node.lower, node.upper, node.step)
+            if node.lower:
+                self.traverse(node.lower)
+            if node.upper:
+                self.traverse(node.upper)
+            if node.step:
+                self.traverse(node.step)
+    
     visit_Match = visit_match_case = visit_MatchValue = visit_MatchSingleton = \
     visit_MatchSequence = visit_MatchStar = visit_MatchMapping = visit_MatchClass = \
     visit_MatchAs = visit_MatchOr = not_implemented
