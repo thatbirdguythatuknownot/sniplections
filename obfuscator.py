@@ -597,6 +597,17 @@ class UnparseObfuscate(_Unparser):
         Obfuscate a string."""
         return self.visit(parse(s))
     
+    def c(self):
+        """.c(): clear
+        Clears/resets obfuscator caches."""
+        self.name_to_taken = {}
+        self.unparse_cache = {}
+        self.overridden_builtins = set()
+        self._precedences = {}
+        self._source = []
+        self._indent = 0
+        super().c()
+    
     def not_implemented(self, node):
         print(f"""<string>:Line {node.lineno}{
                 f' -> Line {node.end_lineno}'
