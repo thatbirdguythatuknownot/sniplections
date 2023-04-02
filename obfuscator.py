@@ -570,8 +570,7 @@ class UnparseObfuscate(_Unparser, Obfuscator):
         if not (name := self.name_to_taken.get(id)):
             if store and id in builtins_dict and id not in self.overridden_builtins:
                 self.overridden_builtins.add(id)
-            name = override or self.nn()
-            self.name_to_taken[id] = name
+            self.name_to_taken[id] = name = override or self.nn()
         return name
     
     def traverse(self, node, name=None):
@@ -762,7 +761,47 @@ class UnparseObfuscate(_Unparser, Obfuscator):
             if node.id in builtins_dict and node.id not in self.overridden_builtins:
                 self.write(f"__builtins__.__getattribute__({self.gs(node.id)})")
             else:
-                self.write(self.get_name(node.id, store=False))
+                is_not_taken = node.id not in self.name_to_taken
+                name = self.get_name(node.id, store=False)
+                if is_not_taken:
+                    self.write(f"({name}:={node.id})")
+                else:
+                    self.write(name)
+    
+    def visit_Constant(self, node):
+        self.write(self.ge(node.value))
+    
+    def visit_List(self, node):
+        if not all([isinstance(x, Starred) for x in node.elts]):
+            return self.not_implemented(node)
+        val = f"__builtins__.__getattribute__({self.gs('list')})({{}})"
+        if node.elts:
+            for x in node.elts:
+                with self.buffered() as buffer:
+                    self.traverse(x.value)
+                val = val.format(''.join(buffer)) + '.__iadd__({})'
+            self.write(val[:-13])
+        else:
+            self.write(val.format(""))
+    
+    def visit_Set(self, node):
+        if not all([isinstance(x, Starred) for x in node.elts]):
+            return self.not_implemented(node)
+        fmt = f"__builtins__.__getattribute__({self.gs('set')})({{}})"
+        if node.elts and all([not hasattr(x.value, 'elts') or x.value.elts
+                              for x in node.elts]):
+            val = ""
+            for x in node.elts:
+                with self.buffered() as buffer:
+                    self.traverse(x.value)
+                if not val:
+                    val = fmt.format(''.join(buffer))
+                    fmt = f"{{}}.__or__({fmt})"
+                else:
+                    val = fmt.format(val, ''.join(buffer))
+            self.write(val)
+        else:
+            self.write(fmt.format(""))
     
     bindunder = {
         "Add": "__add__",
@@ -779,3 +818,5 @@ class UnparseObfuscate(_Unparser, Obfuscator):
         "FloorDiv": "__floordiv__",
         "Pow": "__pow__",
     }
+
+UnparseObfuscate().visit(parse('{*a, *b}'))
