@@ -562,10 +562,9 @@ class Owobfuscwatowr(Obfuscator):
 builtins_dict = __builtins__.__dict__
 
 # i'm finding a lot of flaws with this
-# - caching when short circuiting
-# - caching in any function call (so `random.random()` won't work)
-# - NotImplemented (can't find a way to use __r*__ or flip compare dunders)
-# literally just fix all those and this is fine but i can't do it easily
+# - NotImplemented (can't find a way to use __r*__ or flip compare dunders easily)
+# - statements just not being obfuscated
+# literally just fix those and it's fine
 class UnparseObfuscate(_Unparser):
     type_cache = {}
     
@@ -584,7 +583,9 @@ class UnparseObfuscate(_Unparser):
         self._precedences = {}
         self._forbidden_named = {Module, Delete, Name, Assign, AugAssign,
                                  NamedExpr}
+        self._allowed_name_cached = {Name, Constant}
         self._indent = 0
+        self.untaken_names = []
         self.name_to_taken = {}
         self.unparse_cache = {}
         self._avoid_backslashes = True
@@ -649,7 +650,8 @@ class UnparseObfuscate(_Unparser):
                 self.write(res)
                 return res
             self._unparser._source.clear()
-            if not self.no_walrus and name is None and node.__class__ not in self._forbidden_named:
+            if (not self.no_walrus and name is None and node.__class__ not in self._forbidden_named
+                    and node.__class__ in self._allowed_name_cached):
                 name = self.get_name()
                 if self.get_precedence(node) > _Precedence.NAMED_EXPR:
                     do_parens = True
@@ -670,6 +672,8 @@ class UnparseObfuscate(_Unparser):
     
     def visit_Expr(self, node):
         self.set_precedence(_Precedence.YIELD, node.value)
+        if self._source:
+            self.write("\n")
         self.traverse(node.value)
     
     def visit_NamedExpr(self, node):
@@ -757,7 +761,7 @@ class UnparseObfuscate(_Unparser):
             with self.buffered() as buffer:
                 node = Name(t.id, ctx=Load())
                 self.set_precedence(node, _Precedence.NAMED_EXPR)
-                self.traverse(node)
+                self.anon_traverse(node)
             res = ''.join(buffer)
             name = self.get_name(t.id)
             hasattr_s = self.ge(hasattr)
