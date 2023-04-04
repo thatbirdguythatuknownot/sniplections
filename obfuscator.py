@@ -176,6 +176,7 @@ class Obfuscator:
         "": "__name__.__class__()",
         0: ("({0}:=__name__.__class__().__len__())", (), (), ()),
         1: ("({0}:=__name__.__eq__(__name__).__pos__())", (), (), ()),
+        NotImplemented: ("({0}:=__name__.__eq__(__name__).__add__(__name__))", (), (), ()),
     }
     _default_object_repr_pair = {
         int: "__name__.__len__().__class__",
@@ -202,9 +203,10 @@ class Obfuscator:
         "": "__name__.__class__()",
         0: "__name__.__len__().__class__()",
         1: "__name__.__eq__(__name__).__pos__()",
+        NotImplemented: "__name__.__eq__(__name__).__add__(__name__)",
     }
     _default_nonassigned = {list, tuple, object, complex, open, oct, re, __import__, slice, globals, chr}
-    __valid_name__ = re.compile("_+").fullmatch
+    __valid_name__ = re.compile(r"(_+)\w+\1").fullmatch
     def __init__(self, taken=None):
         self.forbidden_chars = set()
         self.no_walrus = taken is False
@@ -1287,7 +1289,11 @@ class UnparseObfuscate(_Unparser):
                 name_2 = f"({rhs})" if _Precedence.ATOM > rhsp else rhs
             if lhs:
                 name = lhs
-            self.write(")!=NotImplemented else")
+            self.write(")!=")
+            self.write(notimpl_s := self.ge(NotImplemented))
+            if self.ident_check(notimpl_s[-1]):
+                self.write(" ")
+            self.write("else")
             if self.ident_check(name_2[0]):
                 self.write(" ")
             self.write(f"{name_2}.{dunder.replace('__','__r',1)}({name})")
@@ -1299,7 +1305,7 @@ class UnparseObfuscate(_Unparser):
             if self.ident_check(buffer[0][0]):
                 self.write(" ")
             self._source.extend(buffer)
-            self.write("!=NotImplemented else")
+            self.write(f"!={self.ge(NotImplemented)}else")
             self.set_precedence(_Precedence.ATOM, node.right)
             self.traverse(node.right)
             with self.delimit(f".{dunder.replace('__','__r',1)}(", ")"):
