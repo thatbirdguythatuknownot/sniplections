@@ -1306,8 +1306,12 @@ class UnparseObfuscate(_Unparser):
                 self.write(" ")
             self._source.extend(buffer)
             self.write(f"!={self.ge(NotImplemented)}else")
-            self.set_precedence(_Precedence.ATOM, node.right)
-            self.traverse(node.right)
+            with self.buffered() as buffer:
+                self.set_precedence(_Precedence.ATOM, node.right)
+                self.traverse(node.right)
+            if self.ident_check(buffer[0][0]):
+                self.write(" ")
+            self._source.extend(buffer)
             with self.delimit(f".{dunder.replace('__','__r',1)}(", ")"):
                 self.set_precedence(_Precedence.NAMED_EXPR, node.left)
                 self.traverse(node.left)
