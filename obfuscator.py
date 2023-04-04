@@ -225,11 +225,42 @@ class Obfuscator:
         self.ge_cache[v] = val
         return val
     
-    def atq(self, name):
-        """.atq(name): add [to] taken queue -- W
+    def rn(self, name):
+        """.rn(name): remove name -- W
+        Remove all references to `name` and add it to `.taken_queue`.
+        Resets object repr pair value if it mentions the name."""
+        if name in self.taken:
+            self.taken.remove(name)
+        has_word = re.compile(fr"\b{re.escape(name)}\b").search
+        for key, value in self.object_repr_pair.items():
+            if isinstance(value, str) and has_word(value):
+                self.object_repr_pair[key] = \
+                    self._default_object_repr_pair_W[key]
+                if key in self._default_nonassigned \
+                        and key not in self._nonassigned:
+                    self._nonassigned.add(key)
+        for key, value in self.cache.items():
+            if isinstance(value, str) and has_word(value):
+                if val := self._default_cache_W[key]:
+                    self.cache[key] = val
+                else:
+                    del self.cache[key]
+        for key, value in zip(self.ge_cache.keys, self.ge_cache.vals):
+            if isinstance(value, str) and has_word(value):
+                try:
+                    if val := self._default_object_repr_pair_W.get(key):
+                        self.ge_cache[key] = val
+                    else:
+                        del self.ge_cache[key]
+                except TypeError:
+                    del self.ge_cache[key]
+        self.atq(name)
+    
+    def atq(self, name, _check=True):
+        """.atq(name, _check): add [to] taken queue -- W
         Add a new name to `.taken_queue` (if `.__valid_name__(name)`
-        succeeds)."""
-        if self.__valid_name__(name):
+        succeeds or if `_check` is falsy)."""
+        if not _check or self.__valid_name__(name):
             self.taken_queue.append(name)
     
     def nnu(self):
@@ -603,8 +634,7 @@ class Owobfuscwatowr(Obfuscator):
 builtins_dict = __builtins__.__dict__
 
 # i'm finding a lot of flaws with this
-# - NotImplemented (can't find a way to use __r*__ or flip compare dunders easily)
-# - statements just not being obfuscated
+# - parts of statements just not being obfuscated
 # literally just fix those and it's fine
 class UnparseObfuscate(_Unparser):
     type_cache = {}
@@ -626,7 +656,6 @@ class UnparseObfuscate(_Unparser):
         self.name_to_taken = {}
         self._avoid_backslashes = True
         self.overridden_builtins = set()
-        self._unparser = _Unparser()
         self._init_obfuscator = init_obfuscator
         init_obfuscator.__init__(self, taken)
     
@@ -645,7 +674,7 @@ class UnparseObfuscate(_Unparser):
         self._indent = 0
         super().c()
     
-    def not_implemented(self, node):
+    def not_implemented_inline(self, node):
         print(f"""<string>:Line {node.lineno}{
                 f' -> Line {node.end_lineno}'
                 if node.lineno != node.end_lineno else
@@ -655,9 +684,12 @@ class UnparseObfuscate(_Unparser):
                 if node.col_offset != node.end_col_offset else
                 ''
               }: .visit_{(name := type(node).__name__)}() is not implemented""")
+        getattr(_Unparser, f"visit_{name}", _Unparser.generic_visit)(self, node)
+    
+    def not_implemented(self, node):
         if self._source:
             self.write("\n")
-        return getattr(self, f"visit_{name}", self.generic_visit)(node)
+        return self.not_implemented_inline(node)
     
     def cvt_names(self, *names):
         t = []
@@ -677,6 +709,13 @@ class UnparseObfuscate(_Unparser):
             self.name_to_taken[id] = name = override or self.nn()
         return name
     
+    def unget_name(self, id):
+        self.rn(id)
+        if name := self.name_to_taken.get(id):
+            if id in self.overridden_builtins:
+                self.overridden_builtins.remove(id)
+            del self.name_to_taken[id]
+    
     def traverse(self, node):
         if isinstance(node, list):
             for item in node:
@@ -684,20 +723,24 @@ class UnparseObfuscate(_Unparser):
         else:
             s = None
             do_parens = False
-            self._unparser._source.clear()
             NodeVisitor.visit(self, node)
             if (not self.no_walrus and self.get_precedence(node) == _Precedence.NAMED_EXPR
                     and node.__class__ is Constant):
-                self._source[-1] = self._source[-1][1:-1]
+                if self._source[-1] == '(':
+                    self._source[-1] = self._source[-1][1:-1]
     
     def write_named(self, node):
         with self.buffered() as buffer:
             self.traverse(node)
-        if isinstance(node, Name):
+        if self.no_walrus:
+            self.write(name := ''.join(buffer))
+        elif isinstance(node, Name):
             name = self.get_name(node.id)
+            self._source.extend(buffer)
         elif isinstance(node, Constant):
-            string = buffer[-1]
+            string = buffer[0]
             name = string[:string.index(':=')].removeprefix('(')
+            self._source.extend(buffer)
         else:
             name = self.get_name()
             with self.require_parens(_Precedence.NAMED_EXPR, node):
@@ -745,12 +788,15 @@ class UnparseObfuscate(_Unparser):
             if i != 0:
                 self.write(",")
             if isinstance(x, Name):
-                value = f"({self.get_name(x.id)}:={value})"
+                value = f"({x.id}:=({self.get_name(x.id)}:={value}))"
                 continue
             self.traverse(x.value)
             value_unp = value[1:-1] if name else value
             if isinstance(x, Attribute):
-                self.write(f".__setattr__({self.gs(x.attr)},{value_unp})")
+                attr_s = self.gs(x.attr)
+                if attr_s[0] == '(':
+                    attr_s = attr_s[1:-1]
+                self.write(f".__setattr__({attr_s},{value_unp})")
             elif isinstance(x, Subscript):
                 self.write(".__setitem__(")
                 if isinstance(sl := x.slice, Slice):
@@ -767,6 +813,8 @@ class UnparseObfuscate(_Unparser):
             self.write(value)
     
     def visit_Assign(self, node):
+        if self._source:
+            self.write("\n")
         if not self.no_walrus:
             if isinstance(node.value, Tuple):
                 if len(node.targets) != 1:
@@ -802,19 +850,36 @@ class UnparseObfuscate(_Unparser):
             hasattr_s = self.ge(hasattr)
             if self.ident_check(hasattr_s[0]):
                 hasattr_s = f" {hasattr_s}"
+            dunder_s = self.gs(dunder)
+            if dunder_s[0] == '(':
+                dunder_s = dunder_s[1:-1]
             with self.buffered() as buffer:
                 self.traverse(node.value)
             rhs = ''.join(buffer)
-            self.write(f"({name}:={name}.{dunder}({rhs})if{hasattr_s}({res},{self.gs(dunder)})else {name}.{bindunder}({rhs}))")
+            self.write(f"({t.id}:=({name}:={name}.{dunder}({rhs})if{hasattr_s}({res},{dunder_s})else ")
+            self.visit_BinOp(node, lhs=name, rhs=rhs, lhsp=_Precedence.ATOM)
+            self.write("))")
             return
         self.set_precedence(_Precedence.TUPLE, t.value)
         name = self.write_named(t.value)
         if isinstance(t, Attribute):
             t_attr_s = self.gs(t.attr)
+            if t_attr_s[0] == '(':
+               t_attr_s = t_attr_s[1:-1]
+            name_tattr = self.gs(t.attr)
+            hasattr_s = self.ge(hasattr)
+            if self.ident_check(hasattr_s[0]):
+                hasattr_s = f" {hasattr_s}"
+            dunder_s = self.gs(dunder)
+            if dunder_s[0] == '(':
+                dunder_s = dunder_s[1:-1]
             with self.buffered() as buffer:
                 self.traverse(node.value)
             rhs = ''.join(buffer)
-            self.write(f".__setattr__({t_attr_s},{name}.__getattribute__({t_attr_s}).{dunder}({rhs}))")
+            self.write(f".__setattr__({t_attr_s},{name}.{dunder}({rhs})if{hasattr_s}({name}:={name}.__getattribute__({name_tattr}),{dunder_s})else ")
+            self.visit_BinOp(node, lhs=name, rhs=rhs, lhsp=_Precedence.ATOM)
+            self.write(")")
+            self.unget_name(name)
             return
         self.write(".__setitem__(")
         if isinstance(sl := t.slice, Slice):
@@ -825,14 +890,25 @@ class UnparseObfuscate(_Unparser):
         else:
             self.set_precedence(_Precedence.NAMED_EXPR, sl)
             name_2 = self.write_named(sl)
+        hasattr_s = self.ge(hasattr)
+        if self.ident_check(hasattr_s[0]):
+            hasattr_s = f" {hasattr_s}"
+        dunder_s = self.gs(dunder)
+        if dunder_s[0] == '(':
+            dunder_s = dunder_s[1:-1]
         with self.buffered() as buffer:
             self.traverse(node.value)
         rhs = ''.join(buffer)
-        self.write(f",{name}.__getitem__({name_2}).{dunder}({rhs}))")
+        self.write(f",{name}.{dunder}({rhs})if{hasattr_s}({name}:={name}.__getitem__({name_2}),{dunder_s})else ")
+        self.visit_BinOp(node, lhs=name, rhs=rhs, lhsp=_Precedence.ATOM)
+        self.write(")")
+        self.unget_name(name_2)
     
     visit_AnnAssign = visit_Return = not_implemented
     
     def visit_Pass(self, node):
+        if self._source:
+            self.write("\n")
         self.write(self.porpv(None)[0])
     
     visit_Break = visit_Continue = not_implemented
@@ -987,6 +1063,11 @@ class UnparseObfuscate(_Unparser):
             self.write(val)
         else:
             self.write(val.format(""))
+    
+    visit_ListComp = visit_SetComp = visit_DictComp = not_implemented_inline
+    visit_GeneratorExp = not_implemented_inline
+    visit_comprehension = not_implemented_inline
+    visit_IfExp = not_implemented_inline # TODO
     
     def visit_Set(self, node):
         fmt = f"{self.ge(set)}({{}})"
@@ -1181,13 +1262,49 @@ class UnparseObfuscate(_Unparser):
         "Pow": "__pow__",
     }
     
-    def visit_BinOp(self, node):
-        self.set_precedence(_Precedence.ATOM, node.left)
-        self.traverse(node.left)
-        self.write(f".{self.bindunder[node.op.__class__.__name__]}(")
-        self.set_precedence(_Precedence.NAMED_EXPR, node.right)
-        self.traverse(node.right)
-        self.write(")")
+    def visit_BinOp(self, node, lhs=None, rhs=None,
+                    lhsp=_Precedence.NAMED_EXPR, rhsp=_Precedence.NAMED_EXPR):
+        with self.buffered() as buffer:
+            if lhs:
+                with self.delimit_if("(", ")", _Precedence.ATOM > lhsp):
+                    self.write(lhs)
+            else:
+                self.set_precedence(_Precedence.ATOM, node.left)
+                name = self.write_named(node.left)
+            dunder = self.bindunder[node.op.__class__.__name__]
+            self.write(f".{dunder}(")
+            if rhs:
+                self.write(rhs)
+            else:
+                self.set_precedence(_Precedence.NAMED_EXPR, node.right)
+                name_2 = self.write_named(node.right)
+            self.write(")")
+        if not self.no_walrus:
+            name_all = self.get_name()
+            self.write(f"{name_all} if({name_all}:=")
+            self._source.extend(buffer)
+            if rhs:
+                name_2 = f"({rhs})" if _Precedence.ATOM > rhsp else rhs
+            if lhs:
+                name = lhs
+            self.write(")!=NotImplemented else")
+            if self.ident_check(name_2[0]):
+                self.write(" ")
+            self.write(f"{name_2}.{dunder.replace('__','__r',1)}({name})")
+        else:
+            self._source.extend(buffer)
+            if self.ident_check(buffer[-1][-1]):
+                self.write(" ")
+            self.write("if")
+            if self.ident_check(buffer[0][0]):
+                self.write(" ")
+            self._source.extend(buffer)
+            self.write("!=NotImplemented else")
+            self.set_precedence(_Precedence.ATOM, node.right)
+            self.traverse(node.right)
+            with self.delimit(f".{dunder.replace('__','__r',1)}(", ")"):
+                self.set_precedence(_Precedence.NAMED_EXPR, node.left)
+                self.traverse(node.left)
     
     cmpfmts = {
         "Eq": ".__eq__({})",
@@ -1325,7 +1442,7 @@ class UnparseObfuscate(_Unparser):
     visit_Match = visit_match_case = visit_MatchValue = visit_MatchSingleton = \
     visit_MatchSequence = visit_MatchStar = visit_MatchMapping = visit_MatchClass = \
     visit_MatchAs = visit_MatchOr = not_implemented
-    visit_arg = visit_arguments = visit_keyword = not_implemented
+    visit_arg = visit_arguments = visit_keyword = not_implemented_inline
     visit_Lambda = not_implemented
     visit_alias = not_implemented
     visit_withitem = not_implemented
