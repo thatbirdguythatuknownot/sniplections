@@ -635,7 +635,7 @@ builtins_dict = __builtins__.__dict__
 
 # i'm finding a lot of flaws with this
 # - parts of statements just not being obfuscated
-# literally just fix those and it's fine
+# literally just fix that and it's fine
 class UnparseObfuscate(_Unparser):
     type_cache = {}
     
