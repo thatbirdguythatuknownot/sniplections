@@ -42,3 +42,10 @@ clang -fopenmp=libiomp5 -Ofast -march=core-avx2 -shared -o "C:\Program Files\Pyt
 
 **md5.c**<br/>
 A module for `md5` hashing functions. Compiled with the same commands as `c.c` above.
+
+**keys.c**<br/>
+A module with a single function `get_keys()` to return currently pressed keys. Currently only works on windows. Built with the following commands:
+```bash
+clang -O2 -c -I"C:\Program Files\Python311\include" keys.c -o keys.o
+clang -O2 -shared -o "C:\Program Files\Python311\Lib\keys.pyd" keys.o -lPython311 -L"C:\Program Files\Python311\libs"
+```
