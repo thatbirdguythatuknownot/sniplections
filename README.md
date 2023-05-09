@@ -264,3 +264,6 @@ EC cl (chlorine) = 1s²2s²2p⁶3s²3p⁵
 EC o (oxygen) = 1s²2s²2p⁴
 EC 6 (carbon) = 1s²2s²2p²
 ```
+
+**check_noarg_deco.py**<br/>
+Check if the function is the final one being called in the decorator (e.g. `func` in `@func`, result of `func()` in `@func()`). Works only in 3.11.
