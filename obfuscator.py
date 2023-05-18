@@ -117,8 +117,11 @@ def gpf(x): # greatest . factor
 
 class no_hash_dict:
     def __init__(self, kwargs={}):
-        self.keys = list(kwargs)
-        self.vals = list(kwargs.values())
+        if isinstance(kwargs, dict):
+            self.keys = list(kwargs)
+            self.vals = list(kwargs.values())
+        else:
+            self.keys, self.vals = map(list, zip(*kwargs))
     def __contains__(self, val):
         return val in self.keys
     def __getitem__(self, key):
@@ -129,8 +132,12 @@ class no_hash_dict:
         except ValueError:
             self.keys.append(key)
             self.vals.append(val)
+    def __iter__(self):
+        yield from zip(self.keys, self.vals)
+    def __str__(self):
+        return f"<no_hash_dict{{\n    .keys={self.keys!r},\n    .vals={self.vals!r}}}>"
     def __repr__(self):
-        return f"<no_hash_dict{{\n    keys={self.keys!r},\n    vals={self.vals!r}}}>"
+        return f"no_hash_dict([{', '.join(map(repr, zip(self.keys, self.vals)))}])"
 
 class Obfuscator:
     """Obfuscator(taken=None)
@@ -229,7 +236,7 @@ class Obfuscator:
     
     def rn(self, name):
         """.rn(name): remove name -- W
-        Remove all references to `name` and add it to `.taken_queue`.
+        Remove all references to `name`.
         Resets object repr pair value if it mentions the name."""
         if name in self.taken:
             self.taken.remove(name)
@@ -256,7 +263,6 @@ class Obfuscator:
                         del self.ge_cache[key]
                 except TypeError:
                     del self.ge_cache[key]
-        self.atq(name)
     
     def atq(self, name, _check=True):
         """.atq(name, _check): add [to] taken queue -- W
@@ -264,6 +270,18 @@ class Obfuscator:
         succeeds or if `_check` is falsy)."""
         if not _check or self.__valid_name__(name):
             self.taken_queue.append(name)
+    
+    def rnatq(self, name):
+        """.rnatq(name): remove name [and] add [to] taken queue -- W
+        Do `.rn(name)` and add the name to `.taken_queue`."""
+        self.rn(name)
+        self.atq(name)
+    
+    def rnatt(self, name):
+        """.rnatt(): remove name [and] add to `.taken` -- W
+        Do `.rn(name)` and add the name to `.taken`."""
+        self.rn(name)
+        self.taken.add(name)
     
     def nnu(self):
         """.nnu(): new name unmodified -- W
@@ -279,7 +297,7 @@ class Obfuscator:
         """.nn(): new name -- W
         Add a new name, also adding it to `.taken`."""
         name = self.nnu()
-        self.taken.add(name)
+        self.rnatt(name)
         return name
     
     def porpv(self, x, name=None, d=None):
@@ -534,7 +552,7 @@ class Obfuscator:
             if d:
                 rep = f"{rep}.{a}"
                 if ':=' in rep and not name_:
-                    self.taken.add(name)
+                    self.rnatt(name)
                 return rep, r, True
         return self.porpv(chr)[0], ord(c), False
     
@@ -554,7 +572,8 @@ class Obfuscator:
                 continue
             i = s.find(x)
             if i != -1:
-                in_cache[i] = (len(x), values[x])
+                if i not in in_cache or (l := len(x)) > len(in_cache[i][0]):
+                    in_cache[i] = (l, values[x])
         len_s = len(s)
         if self.no_walrus:
             l = []
@@ -576,7 +595,9 @@ class Obfuscator:
         l = []
         i = 0
         while i < len_s:
+            print(i)
             if i in in_cache:
+                print(i)
                 length, rep = in_cache[i]
                 l.append(rep)
                 i += length
@@ -586,7 +607,7 @@ class Obfuscator:
             i += 1
         res = reduce("{}.__add__({})".format, l)
         if not temp_name:
-            self.taken.add(name)
+            self.rnatt(name)
             values[s] = name
         return f"({name}:={res})"
     
@@ -710,19 +731,19 @@ class UnparseObfuscate(_Unparser):
                 self.overridden_builtins.add(id)
             if not override and self.__valid_name__(id):
                 override = id
-                self.taken.add(id)
+                self.rnatt(id)
             self.name_to_taken[id] = name = override or self.nn()
         return name
     
     def unget_name(self, id):
-        self.rn(id)
+        self.rnatq(id)
         if name := self.name_to_taken.get(id):
             if id in self.overridden_builtins:
                 self.overridden_builtins.remove(id)
             del self.name_to_taken[id]
     
     def copy_name_def(self, scope_from, name):
-        self.taken.add(name)
+        self.rnatt(name)
         is_word = re.compile(re.escape(name)).fullmatch
         for key, value in scope_from.object_repr_pair.items():
             if isinstance(value, str) and is_word(value):
@@ -1622,7 +1643,7 @@ class UnparseObfuscate(_Unparser):
         if node.annotation:
             self.write(":")
             self.traverse(node.annotation)
-
+    
     def visit_arguments(self, node, name_get=None):
         name_get = name_get or self.get_name
         first = True
