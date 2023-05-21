@@ -30,4 +30,4 @@ def safe_eval_norecurse(input_string, allowed_names=None, builtins_dict=None, co
             if name not in allowed_names:
                 raise NameError(f"Use of {name} not allowed")
         stack_pop()
-    return eval(code, {"builtins": builtins_dict}, allowed_names)
+    return eval(code, {"__builtins__": builtins_dict}, allowed_names)
