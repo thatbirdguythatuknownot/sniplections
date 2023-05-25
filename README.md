@@ -267,3 +267,26 @@ EC 6 (carbon) = 1s²2s²2p²
 
 **check_noarg_deco.py**<br/>
 Check if the function is the final one being called in the decorator (e.g. `func` in `@func`, result of `func()` in `@func()`). Works only in 3.11.
+
+**punnett_square.py**<br/>
+Punnett square generation in Python. For example, this:
+```py
+from punnett_square import gen_punnett, string_punnett
+traits = {'R': 'Round', 'r': 'Wrinkled', 'Y': 'Yellow', 'y': 'Green'}
+square, cross_1, cross_2, gtype_ratio, ptype_ratio = gen_punnett('Rr', 'RR', traits=traits)
+print(string_punnett(square, cross_1, cross_2))
+print(D)
+print(E)
+```
+Outputs this:
+```
+  +------------+------------+
+  |     R      |     R      |
+--+------------+------------+
+R | RR (Round) | RR (Round) |
+--+------------+------------+
+r | Rr (Round) | Rr (Round) |
+--+------------+------------+
+{'RR': 2, 'Rr': 2}
+{'Round': 4}
+```
