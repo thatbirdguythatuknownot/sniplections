@@ -288,11 +288,11 @@ Outputs this:
 +---+------------+------------+
 
 Genotype Ratio:
-RR:Rr
-2 :2
+  RR:Rr
+  2 :2
 
 Phenotype Ratio:
-    Round : 4
+  Round : 4
 
 
      +---------------------+---------------------+------------------------+------------------------+
@@ -308,12 +308,12 @@ Phenotype Ratio:
 +----+---------------------+---------------------+------------------------+------------------------+
 
 Genotype Ratio:
-RRYY:RRYy:RrYY:RrYy:RRyy:Rryy:rrYY:rrYy:rryy
- 1  : 2  : 2  : 4  : 1  : 2  : 1  : 2  : 1
+  RRYY:RRYy:RrYY:RrYy:RRyy:Rryy:rrYY:rrYy:rryy
+   1  : 2  : 2  : 4  : 1  : 2  : 1  : 2  : 1
 
 Phenotype Ratio:
-       Round/Yellow : 9
-        Round/Green : 3
-    Wrinkled/Yellow : 3
-     Wrinkled/Green : 1
+     Round/Yellow : 9
+      Round/Green : 3
+  Wrinkled/Yellow : 3
+   Wrinkled/Green : 1
 ```
