@@ -128,7 +128,7 @@ def string_punnett(square, crossed_1=None, crossed_2=None):
             for gtype, max_len in zip(crossed_2, col_max_lens)
         )
         if max_left_len:
-            header = f"{' ' * max_left_len} |{header}|"
+            header = f"{' ' * max_left_len}   |{header}|"
         else:
             header = f"|{header}|"
     else:
@@ -137,8 +137,8 @@ def string_punnett(square, crossed_1=None, crossed_2=None):
     if col_max_lens:
         sep_1 = f"+{'+'.join('-'*max_len for max_len in col_max_lens)}+\n"
         if max_left_len:
-            sep = f"\n{'-' * max_left_len}-{sep_1}"
-            sep_1 = f"{' ' * max_left_len} {sep_1}"
+            sep = f"\n+{'-' * max_left_len}--{sep_1}"
+            sep_1 = f"{' ' * max_left_len}   {sep_1}"
         else:
             sep = f"\n{sep_1}"
     else:
@@ -149,5 +149,5 @@ def string_punnett(square, crossed_1=None, crossed_2=None):
                          for i, x in enumerate(row))
         row_s = f"|{row_s}|"
         if crossed_1:
-            to_join.append(f"{crossed_1[i]:>{max_left_len}} {row_s}")
+            to_join.append(f"| {crossed_1[i]:>{max_left_len}} {row_s}")
     return sep_1 + sep.join(to_join) + sep[:-1]
