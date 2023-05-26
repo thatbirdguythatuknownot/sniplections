@@ -271,16 +271,11 @@ Check if the function is the final one being called in the decorator (e.g. `func
 **punnett_square.py**<br/>
 Punnett square generation in Python. For example, this:
 ```py
-from punnett_square import gen_punnett, string_punnett
+from punnett_square import gen_punnett, string_gen_punnett
 traits = {'R': 'Round', 'r': 'Wrinkled', 'Y': 'Yellow', 'y': 'Green'}
-square, cross_1, cross_2, gtype_ratio, ptype_ratio = gen_punnett('Rr', 'RR', traits=traits)
-print(string_punnett(square, cross_1, cross_2))
-print(gtype_ratio)
-print(ptype_ratio)
-square, cross_1, cross_2, gtype_ratio, ptype_ratio = gen_punnett('RrYy', 'RrYy', traits=traits)
-print(string_punnett(square, cross_1, cross_2))
-print(gtype_ratio)
-print(ptype_ratio)
+print(string_gen_punnett(gen_punnett('Rr', 'RR', traits=traits)))
+print("\n")
+print(string_gen_punnett(gen_punnett('RrYy', 'RrYy', traits=traits)))
 ```
 Outputs this:
 ```
@@ -291,8 +286,15 @@ Outputs this:
 +---+------------+------------+
 | r | Rr (Round) | Rr (Round) |
 +---+------------+------------+
-{'RR': 2, 'Rr': 2}
-{'Round': 4}
+
+Genotype Ratio:
+RR:Rr
+2 :2
+
+Phenotype Ratio:
+    Round : 4
+
+
      +---------------------+---------------------+------------------------+------------------------+
      |         RY          |         Ry          |           rY           |           ry           |
 +----+---------------------+---------------------+------------------------+------------------------+
@@ -304,6 +306,14 @@ Outputs this:
 +----+---------------------+---------------------+------------------------+------------------------+
 | ry | RrYy (Round/Yellow) | Rryy (Round/Green)  | rrYy (Wrinkled/Yellow) | rryy (Wrinkled/Green)  |
 +----+---------------------+---------------------+------------------------+------------------------+
-{'RRYY': 1, 'RRYy': 2, 'RrYY': 2, 'RrYy': 4, 'RRyy': 1, 'Rryy': 2, 'rrYY': 1, 'rrYy': 2, 'rryy': 1}
-{'Round/Yellow': 9, 'Round/Green': 3, 'Wrinkled/Yellow': 3, 'Wrinkled/Green': 1}
+
+Genotype Ratio:
+RRYY:RRYy:RrYY:RrYy:RRyy:Rryy:rrYY:rrYy:rryy
+ 1  : 2  : 2  : 4  : 1  : 2  : 1  : 2  : 1
+
+Phenotype Ratio:
+       Round/Yellow : 9
+        Round/Green : 3
+    Wrinkled/Yellow : 3
+     Wrinkled/Green : 1
 ```
