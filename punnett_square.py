@@ -145,9 +145,12 @@ def string_punnett(square, crossed_1=None, crossed_2=None):
         sep = sep_1 = ""
     to_join = [header]
     for i, row in enumerate(square):
-        row_s = ' | '.join(f'{str(x):<{col_max_lens[i]-2}}'
-                           for i, x in enumerate(row))
-        row_s = f"| {row_s} |"
+        if row:
+            row_s = ' | '.join(f'{str(x):<{col_max_lens[i]-2}}'
+                               for i, x in enumerate(row))
+            row_s = f"| {row_s} |"
+        else:
+            row_s = "||"
         if crossed_1:
             to_join.append(f"| {crossed_1[i]:>{max_left_len}} {row_s}")
     return sep_1 + sep.join(to_join) + sep[:-1]
