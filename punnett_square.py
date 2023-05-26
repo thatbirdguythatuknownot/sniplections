@@ -165,10 +165,10 @@ def string_gen_punnett(values):
         for gtype, num in genotype_ratio.items():
             gtypes.append(gtype)
             num_fmts.append(f"{num:^{len(gtype)}}")
-        res = f"{res}\n\nGenotype Ratio:\n" \
-              f"{':'.join(gtypes)}\n{':'.join(num_fmts)}"
+        res = f"{res}\n\nGenotype Ratio:" \
+              f"\n  {':'.join(gtypes)}\n  {':'.join(num_fmts)}"
     if phenotype_ratio:
-        max_len = max(map(len, phenotype_ratio)) + 4
+        max_len = max(map(len, phenotype_ratio)) + 2
         lines = '\n'.join(f"{phenotype:>{max_len}} : {num}"
                           for phenotype, num in phenotype_ratio.items())
         res = f"{res}\n\nPhenotype Ratio:\n{lines}"
