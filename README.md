@@ -296,9 +296,9 @@ Outputs this:
      +---------------------+---------------------+------------------------+------------------------+
      |         RY          |         Ry          |           rY           |           ry           |
 +----+---------------------+---------------------+------------------------+------------------------+
-| RY | RRYY (Round/Yellow) | RRYy (Round/Yellow) |  RrYY (Round/Yellow)   |  RrYy (Round/Yellow)   |
+| RY | RRYY (Round/Yellow) | RRYy (Round/Yellow) | RrYY (Round/Yellow)    | RrYy (Round/Yellow)    |
 +----+---------------------+---------------------+------------------------+------------------------+
-| Ry | RRYy (Round/Yellow) | RRyy (Round/Green)  |  RrYy (Round/Yellow)   |   Rryy (Round/Green)   |
+| Ry | RRYy (Round/Yellow) | RRyy (Round/Green)  | RrYy (Round/Yellow)    | Rryy (Round/Green)     |
 +----+---------------------+---------------------+------------------------+------------------------+
 | rY | RrYY (Round/Yellow) | RrYy (Round/Yellow) | rrYY (Wrinkled/Yellow) | rrYy (Wrinkled/Yellow) |
 +----+---------------------+---------------------+------------------------+------------------------+
