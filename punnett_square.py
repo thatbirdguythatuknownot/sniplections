@@ -151,3 +151,25 @@ def string_punnett(square, crossed_1=None, crossed_2=None):
         if crossed_1:
             to_join.append(f"| {crossed_1[i]:>{max_left_len}} {row_s}")
     return sep_1 + sep.join(to_join) + sep[:-1]
+
+def string_gen_punnett(values):
+    """
+    Return the formatted string for the tuple containing the 5 values
+      returned by gen_punnett().
+    """
+    square, crossed_1, crossed_2, genotype_ratio, phenotype_ratio = values
+    res = string_punnett(square, crossed_1, crossed_2)
+    if genotype_ratio:
+        gtypes = []
+        num_fmts = []
+        for gtype, num in genotype_ratio.items():
+            gtypes.append(gtype)
+            num_fmts.append(f"{num:^{len(gtype)}}")
+        res = f"{res}\n\nGenotype Ratio:\n" \
+              f"{':'.join(gtypes)}\n{':'.join(num_fmts)}"
+    if phenotype_ratio:
+        max_len = max(map(len, phenotype_ratio)) + 4
+        lines = '\n'.join(f"{phenotype:>{max_len}} : {num}"
+                          for phenotype, num in phenotype_ratio.items())
+        res = f"{res}\n\nPhenotype Ratio:\n{lines}"
+    return res
