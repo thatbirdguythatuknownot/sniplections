@@ -14,7 +14,8 @@ class SquareUnit:
 
 def gen_punnett(org_1, org_2, traits=None):
     """
-    Generate a punnett square from shared genotypes (e.g. R/r and S/s from RRssTT x RrSSAA).
+    Generate a punnett square from shared genes (e.g. R/r and S/s from RRssTT x RrSSAA).
+    Non-shared genes will just be prepended or appended to the genotype of the results.
     Takes in 2 (required) strings of the combined genotypes and an optional argument for
       labeling the genotypes (dictionary with key-value pair as `allele`: `label`).
     Return a punnett square as a 2D list, crossed traits as 2 lists,
@@ -57,6 +58,8 @@ def gen_punnett(org_1, org_2, traits=None):
             genotype_1.append(tup)
     dup_traits = set()
     sort_keys = {}
+    # only useful if there are no common keys
+    uncommon_keys = []
     i = 0
     len_org_2 = len(org_2)
     while i < len_org_2:
@@ -64,7 +67,7 @@ def gen_punnett(org_1, org_2, traits=None):
         g1l = geno_1.lower()
         if cancel := g1l in dup_traits:
             print(f"warning: ignoring duplicate trait {geno_1!r}")
-        elif cancel := g1l not in traits_lower:
+        elif uncommon := g1l not in traits_lower:
             pass
         else:
             dup_traits.add(g1l)
@@ -74,18 +77,68 @@ def gen_punnett(org_1, org_2, traits=None):
             print("warning: assuming pure homozygous genotype")
             if cancel:
                 continue
-            genotype_2.append((geno_1, geno_1))
+            tup = (geno_1, geno_1)
         else:
             i += 1
             if cancel:
                 continue
+            # prioritize uppercase
             if not geno_1.isupper() and geno_2.isupper():
                 tup = (geno_2, geno_1)
             else:
                 tup = (geno_1, geno_2)
-            genotype_2.append(tup)
+        if uncommon:
+            uncommon_keys.append(tup)
+            continue
+        genotype_2.append(tup)
+    if not sort_keys:
+        crossed_1 = []
+        crossed_2 = []
+        pheno_1 = []
+        pheno_2 = []
+        for a, b in genotype_1:
+            # already ordered by the while
+            crossed_1.append(a + b)
+            pheno_1.append(traits.get(a, a))
+        # there should be nothing in genotype_2 so use uncommon_keys
+        for a, b in uncommon_keys:
+            # already ordered by the while
+            crossed_2.append(a + b)
+            pheno_2.append(traits.get(a, a))
+        if not crossed_1 and not crossed_2:
+            # if there are no traits at all to be crossed, return:
+            # - still a 2D list as the first value, but effectively empty
+            # - 2 empty lists
+            # - 2 empty dictionaries
+            return [[]], [], [], {}, {}
+        gtype_1 = ''.join(crossed_1)
+        gtype_2 = ''.join(crossed_2)
+        crossed_1 = [gtype_1] if gtype_1 else []
+        crossed_2 = [gtype_2] if gtype_2 else []
+        genotype = gtype_1 + gtype_2
+        ptype_1 = '/'.join(phenotype := pheno_1 + pheno_2)
+        # return:
+        # - a 2D list with only one element (combined traits)
+        # - the first traits to cross as a single element in a list
+        # - the second traits to cross as a single element in a list
+        # - 2 dictionaries each with only one key-value pair (where value is 1)
+        return ([[SquareUnit(genotype, phenotype)]], crossed_1, crossed_2,
+                {genotype: 1}, {ptype_1: 1})
+    g_prefix = []
+    p_prefix = []
     for x in reversed(traits_lower.values()):
-        del genotype_1[x]
+        a, b = genotype_1[x]
+        # already ordered by the while
+        g_prefix.append(a + b)
+        p_prefix.append(traits.get(a, a))
+    g_prefix = ''.join(g_prefix)
+    g_suffix = []
+    p_suffix = []
+    for a, b in uncommon_keys:
+        # already ordered by the while
+        g_suffix.append(a + b)
+        p_suffix.append(traits.get(a, a))
+    g_suffix = ''.join(g_suffix)
     genotype_2.sort(key=lambda x: sort_keys[x[0].lower()])
     crossed_1 = [*map(''.join, product(*genotype_1))]
     crossed_2 = [*map(''.join, product(*genotype_2))]
@@ -96,17 +149,21 @@ def gen_punnett(org_1, org_2, traits=None):
         row = []
         for cross_2 in crossed_2:
             geno = []
-            pheno = []
+            pheno = p_prefix[:]
             for a, b in zip(cross_1, cross_2):
+                # prioritize uppercase
                 if not a.isupper() and b.isupper():
                     a, b = b, a
                 pheno.append(traits.get(a, a))
                 geno.append(a + b)
-            genotype_R[gtype := ''.join(geno)] += 1
+            pheno.extend(p_suffix)
+            genotype_R[gtype := f"{g_prefix}{''.join(geno)}{g_suffix}"] += 1
             phenotype_R['/'.join(pheno)] += 1
             row.append(SquareUnit(gtype, pheno))
         square.append(row)
-    return square, crossed_1, crossed_2, dict(genotype_R), dict(phenotype_R)
+    return (square, [f"{g_prefix}{x}" for x in crossed_1],
+            [f"{x}{g_suffix}" for x in crossed_2], dict(genotype_R),
+            dict(phenotype_R))
 
 def string_punnett(square, crossed_1=None, crossed_2=None):
     """
@@ -128,19 +185,21 @@ def string_punnett(square, crossed_1=None, crossed_2=None):
             for gtype, max_len in zip(crossed_2, col_max_lens)
         )
         if max_left_len:
-            header = f"{' ' * max_left_len}   |{header}|"
+            header = f"{' ' * max_left_len}   |{header}|\n"
         else:
-            header = f"|{header}|"
+            header = f"|{header}|\n"
     else:
         col_max_lens = [2+max(map(len, col)) for col in col_strs]
         header = ""
     if col_max_lens:
         sep_1 = f"+{'+'.join('-'*max_len for max_len in col_max_lens)}+\n"
         if max_left_len:
-            sep = f"\n+{'-' * max_left_len}--{sep_1}"
+            sep = f"+{'-' * max_left_len}--{sep_1}"
             sep_1 = f"{' ' * max_left_len}   {sep_1}"
         else:
-            sep = f"\n{sep_1}"
+            sep = sep_1
+        if not header:
+            sep_1 = ""
     else:
         sep = sep_1 = ""
     to_join = [header]
@@ -148,11 +207,13 @@ def string_punnett(square, crossed_1=None, crossed_2=None):
         if row:
             row_s = ' | '.join(f'{str(x):<{col_max_lens[i]-2}}'
                                for i, x in enumerate(row))
-            row_s = f"| {row_s} |"
-        else:
-            row_s = "||"
+            row_s = f"| {row_s} |\n"
         if crossed_1:
+            if not row:
+                row_s = "||\n"
             to_join.append(f"| {crossed_1[i]:>{max_left_len}} {row_s}")
+        elif row:
+            to_join.append(row_s)
     return sep_1 + sep.join(to_join) + sep[:-1]
 
 def string_gen_punnett(values):
@@ -162,6 +223,8 @@ def string_gen_punnett(values):
     """
     square, crossed_1, crossed_2, genotype_ratio, phenotype_ratio = values
     res = string_punnett(square, crossed_1, crossed_2)
+    if not res:
+        res = "++\n++"
     if genotype_ratio:
         gtypes = []
         num_fmts = []
@@ -170,9 +233,13 @@ def string_gen_punnett(values):
             num_fmts.append(f"{num:^{len(gtype)}}")
         res = f"{res}\n\nGenotype Ratio:" \
               f"\n  {':'.join(gtypes)}\n  {':'.join(num_fmts)}"
+    else:
+        res = f"{res}\n\nNo Genotype Ratio!"
     if phenotype_ratio:
         max_len = max(map(len, phenotype_ratio)) + 2
         lines = '\n'.join(f"{phenotype:>{max_len}} : {num}"
                           for phenotype, num in phenotype_ratio.items())
         res = f"{res}\n\nPhenotype Ratio:\n{lines}"
+    else:
+        res = f"{res}\n\nNo Phenotype Ratio!"
     return res
