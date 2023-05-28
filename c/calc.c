@@ -20,8 +20,8 @@ typedef enum {
 } Prec;
 
 #define IS_WSP(x) \
-    (((x) == ' ') || ((x) == '\t') || \
-     ((x) == '\r') || ((x) == '\n'))
+    ((x) == ' ' || (x) == '\t' || \
+     (x) == '\r' || (x) == '\n')
 
 #define SKIP_WSP(parser) \
     if (IS_WSP(*(parser)->pos)) { \
@@ -133,7 +133,11 @@ number parse_expr(Parser *parser, Prec prec, int ret_immd) {
             res = pow(res, rhs);
             break;
         case ')':
-            return res;
+            RET_IF(parser->paren > 0 || prec != P_EXPR, res)
+            parser->paren = 0;
+            fputs("WARNING: non-matching closing parenthesis\n", stderr);
+            ++parser->pos;
+            break;
         case '\0':
             break;
         default:
