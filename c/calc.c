@@ -14,6 +14,7 @@ typedef enum {
     P_EXPR,
     P_BOP1,
     P_BOP2,
+    P_JUXT,
     P_UOP,
     P_BOP3,
     P_ATOM,
@@ -40,7 +41,7 @@ typedef enum {
         return val; \
     } \
 
-number parse_expr(Parser *parser, Prec prec, int ret_immd) {
+number parse_expr(Parser *parser, Prec prec) {
     number res, rhs;
     char c;
     int length;
@@ -50,20 +51,20 @@ number parse_expr(Parser *parser, Prec prec, int ret_immd) {
     switch (*parser->pos) {
     case '-':
         ++parser->pos;
-        res = parse_expr(parser, P_UOP, 0);
+        res = parse_expr(parser, P_UOP);
         ERR_PROP(res, parser)
         res = -res;
         break;
     case '+':
         ++parser->pos;
-        res = parse_expr(parser, P_UOP, 0);
+        res = parse_expr(parser, P_UOP);
         ERR_PROP(res, parser)
         res = +res;
         break;
     case '(':
         ++parser->pos;
         parser->paren++;
-        res = parse_expr(parser, P_EXPR, 0);
+        res = parse_expr(parser, P_EXPR);
         ERR_PROP(res, parser)
         if (*parser->pos == ')') {
             ++parser->pos;
@@ -85,7 +86,6 @@ number parse_expr(Parser *parser, Prec prec, int ret_immd) {
         fputs("ERROR: expected number", stderr);
         return -1;
     }
-    RET_IF(ret_immd, res)
 
     for (; *parser->pos;) {
         SKIP_WSP(parser)
@@ -93,42 +93,42 @@ number parse_expr(Parser *parser, Prec prec, int ret_immd) {
         case '-':
             RET_IF(prec >= P_BOP1, res)
             ++parser->pos;
-            rhs = parse_expr(parser, P_BOP1, 0);
+            rhs = parse_expr(parser, P_BOP1);
             ERR_PROP(rhs, parser)
             res -= rhs;
             break;
         case '+':
             RET_IF(prec >= P_BOP1, res)
             ++parser->pos;
-            rhs = parse_expr(parser, P_BOP1, 0);
+            rhs = parse_expr(parser, P_BOP1);
             ERR_PROP(rhs, parser)
             res += rhs;
             break;
         case '*':
             RET_IF(prec >= P_BOP2, res)
             ++parser->pos;
-            rhs = parse_expr(parser, P_BOP2, 0);
+            rhs = parse_expr(parser, P_BOP2);
             ERR_PROP(rhs, parser)
             res *= rhs;
             break;
         case '/':
             RET_IF(prec >= P_BOP2, res)
             ++parser->pos;
-            rhs = parse_expr(parser, P_BOP2, 0);
+            rhs = parse_expr(parser, P_BOP2);
             ERR_PROP(rhs, parser)
             res /= rhs;
             break;
         case '%':
             RET_IF(prec >= P_BOP2, res)
             ++parser->pos;
-            rhs = parse_expr(parser, P_BOP2, 0);
+            rhs = parse_expr(parser, P_BOP2);
             ERR_PROP(rhs, parser)
             res = fmod(res, rhs);
             break;
         case '^':
             RET_IF(prec > P_BOP3, res)
             ++parser->pos;
-            rhs = parse_expr(parser, P_UOP, 0);
+            rhs = parse_expr(parser, P_UOP);
             ERR_PROP(rhs, parser)
             res = pow(res, rhs);
             break;
@@ -138,12 +138,32 @@ number parse_expr(Parser *parser, Prec prec, int ret_immd) {
             fputs("WARNING: non-matching closing parenthesis\n", stderr);
             ++parser->pos;
             break;
+        case '(':
+            RET_IF(prec >= P_JUXT, res)
+            ++parser->pos;
+            parser->paren++;
+            rhs = parse_expr(parser, P_EXPR);
+            ERR_PROP(rhs, parser)
+            if (*parser->pos == ')') {
+                ++parser->pos;
+                if (--parser->paren < 0) {
+                    fputs("WARNING: non-matching closing parenthesis\n", stderr);
+                    parser->paren = 0;
+                }
+            }
+            else {
+                fputs("WARNING: unclosed parenthesis\n", stderr);
+            }
+            res *= rhs;
+            break;
         case '\0':
             break;
         default:
-            fputs("ERROR: unknown character encountered", stderr);
-            parser->has = 1;
-            return -1.;
+            RET_IF(prec >= P_JUXT, res)
+            rhs = parse_expr(parser, P_JUXT);
+            ERR_PROP(rhs, parser)
+            res *= rhs;
+            break;
         }
     }
 
@@ -164,6 +184,8 @@ int main() {
         "   multiplication (*)\n"
         "   division (/)\n"
         "   modulo (%)\n"
+        "   negation (unary -)\n"
+        "   juxtaposition (e.g. 2(3 + 4) )\n"
         "   power (^)\n"
     );
 
@@ -171,7 +193,7 @@ int main() {
         if (length == 1 && (buffer[0] == 'Q' || buffer[0] == 'q')) {
             break;
         }
-        number res = parse_expr(&parser, P_EXPR, 0);
+        number res = parse_expr(&parser, P_EXPR);
         if (res == -1. && parser.has) {
             fprintf(stderr, " (position %ld)\n", parser.pos - begin);
             parser.has = 0;
