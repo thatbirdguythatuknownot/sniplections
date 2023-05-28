@@ -13,3 +13,6 @@ A process, that hides its own console window, to automatically quit a Roblox win
 ```bash
 clang -O3 -mavx2 unfull.c -o unfull.exe
 ```
+
+**calc.c**<br/>
+A calculator.
