@@ -1,5 +1,6 @@
 from collections import defaultdict
 from itertools import product
+from math import gcd, log10, trunc
 
 class SquareUnit:
     __slots__ = ('genotype', 'phenotype')
@@ -225,21 +226,55 @@ def string_gen_punnett(values):
     res = string_punnett(square, crossed_1, crossed_2)
     if not res:
         res = "++\n++"
+    if genotype_ratio or phenotype_ratio:
+        total_n = len(square)
+        total_n *= total_n
     if genotype_ratio:
         gtypes = []
         num_fmts = []
+        redcnum_fmts = []
+        percents = []
+        gcd_nums = gcd(*genotype_ratio.values())
+        can_redc = gcd_nums != 1
         for gtype, num in genotype_ratio.items():
-            gtypes.append(gtype)
-            num_fmts.append(f"{num:^{len(gtype)}}")
-        res = f"{res}\n\nGenotype Ratio:" \
-              f"\n  {':'.join(gtypes)}\n  {':'.join(num_fmts)}"
+            ml = max(len(gtype), trunc(log10(num)) + 1,
+                     len(perc := f"{100*num/total_n:g}%"))
+            gtypes.append(gtype.rjust(ml))
+            num_fmts.append(f"{num:>{ml}}")
+            if can_redc:
+                redcnum_fmts.append(f"{num//gcd_nums:>{ml}}")
+            percents.append(perc.rjust(ml))
+        res = f"{res}\n\nGenotype Info:" \
+              f"\n  {'|'.join(percents)}\n  {':'.join(gtypes)}" \
+              f"\n  {':'.join(num_fmts)}"
+        if redcnum_fmts:
+            res = f"{res}\n  {':'.join(redcnum_fmts)}"
     else:
-        res = f"{res}\n\nNo Genotype Ratio!"
+        res = f"{res}\n\nNo Genotype Info!"
     if phenotype_ratio:
         max_len = max(map(len, phenotype_ratio)) + 2
-        lines = '\n'.join(f"{phenotype:>{max_len}} : {num}"
-                          for phenotype, num in phenotype_ratio.items())
+        gcd_nums = gcd(*phenotype_ratio.values())
+        can_redc = gcd_nums != 1
+        percents = []
+        max_perclen = max_numlen = 0
+        for num in phenotype_ratio.values():
+            percents.append(perc := f"{100*num/total_n:g}%")
+            if (l_perc := len(perc)) > max_perclen:
+                max_perclen = l_perc
+            if can_redc and (l_num := trunc(log10(num)) + 1) > max_numlen:
+                max_numlen = l_num
+        if can_redc:
+            max_numlen += 1
+        lines = []
+        for perc, (phenotype, num) in zip(percents, phenotype_ratio.items()):
+            temp = f"{phenotype:>{max_len}} ({perc:>{max_perclen}}) : "
+            if can_redc:
+                temp = f"{temp}{num:<{max_numlen}} : {num//gcd_nums}"
+            else:
+                temp = f"{temp}{num}"
+            lines.append(temp)
+        lines = '\n'.join(lines)
         res = f"{res}\n\nPhenotype Ratio:\n{lines}"
     else:
-        res = f"{res}\n\nNo Phenotype Ratio!"
+        res = f"{res}\n\nNo Phenotype Info!"
     return res
