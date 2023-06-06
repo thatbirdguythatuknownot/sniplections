@@ -321,6 +321,8 @@ Phenotype Ratio:
 **make_class.py**<br/>
 Original idea from <@!396290259907903491> (Ava#4982). Decorator to make a class from a function (doesn't necessarily turn the function into a class). Example:
 ```py
+from make_class import make
+
 @make
 def MyClass():
     def __init__(self, first, second):
