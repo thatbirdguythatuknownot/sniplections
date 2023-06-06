@@ -317,3 +317,18 @@ Phenotype Ratio:
   Wrinkled/Yellow : 3
    Wrinkled/Green : 1
 ```
+
+**make_class.py**<br/>
+Original idea from <@!396290259907903491> (Ava#4982). Decorator to make a class from a function (doesn't necessarily turn the function into a class). Example:
+```py
+@make
+def MyClass():
+    def __init__(self, first, second):
+        self.first = first
+        self.second = second
+    def sum(self):
+        return self.first + self.second
+
+a = MyClass(1, 2)
+print(a.sum()) # 3
+```
