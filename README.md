@@ -210,7 +210,8 @@ Expands rational numbers with a number `p` which satisfies `2 <= p <= 62`. To be
 ```py
 from padic_expansion import itoo # means input-to-output
 
-print(itoo('3 -5/11')) # 110021100211002
+print(itoo('3 -5/11 15')) # 110021100211002
+print(itoo_cycle('3 -5/11')) # (11002)
 ```
 
 **min_diff_digits.py**<br/>
