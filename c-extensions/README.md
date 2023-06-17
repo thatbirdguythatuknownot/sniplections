@@ -49,3 +49,6 @@ A module with a single function `get_keys()` to return currently pressed keys. C
 clang -O2 -c -I"C:\Program Files\Python311\include" keys.c -o keys.o
 clang -O2 -shared -o "C:\Program Files\Python311\Lib\keys.pyd" keys.o -lPython311 -L"C:\Program Files\Python311\libs"
 ```
+
+**uwuifier.c**<br/>
+A module with functions (main one is `uwuify()`) to uwuify a text. Compiled with the same commands as `keys.c` above.
