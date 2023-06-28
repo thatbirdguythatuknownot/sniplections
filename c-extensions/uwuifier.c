@@ -66,15 +66,15 @@ rand_ull(void)
     unsigned long long r = 0;
 
     /*
-    msb (max)   i
-    14          0
-    22          8
-    30         16
-    38         24
-    46         32
-    54         40
-    62         48
-    !!         56 (should not be reached)
+    msb (max)   i*8
+    14            0
+    22            8
+    30           16
+    38           24
+    46           32
+    54           40
+    62           48
+    !!           56 (should not be reached)
     */
     for (int i = 0; i < sizeof(unsigned long long) - 1; i++) {
         r = (r << 8) ^ rand();
