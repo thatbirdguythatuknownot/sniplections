@@ -52,3 +52,10 @@ clang -O2 -shared -o "C:\Program Files\Python311\Lib\keys.pyd" keys.o -lPython31
 
 **uwuifier.c**<br/>
 A module with functions (main one is `uwuify()`) to uwuify a text. Compiled with the same commands as `keys.c` above.
+
+**pdist_cext.c**<br/>
+For [this repo](https://github.com/trygvrad/python-speedup-comparison). Built with:
+```bash
+clang -O2 -ffast-math -c -I"C:\Program Files\Python311\include" -I"C:\Program Files\Python311\Lib\site-packages\numpy\core\include" pdist_cext.c -o pdist_cext.o
+clang -O2 -shared -o "C:\Program Files\Python311\Lib\pdist_cext.pyd" pdist_cext.o -lPython311 -L"C:\Program Files\Python311\libs"
+```
