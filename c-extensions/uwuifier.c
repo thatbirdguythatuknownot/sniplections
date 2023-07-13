@@ -50,6 +50,17 @@
 #  define LOCAL(type) static inline type
 #endif
 
+#else
+
+#define UNLIKELY(value) (value)
+#define LIKELY(value) (value)
+#define BUNLIKELY(value) (!!(value))
+#define BLIKELY(value) (!!(value))
+
+#define ASSUME(value) ((void)0)
+
+#define LOCAL(type) static inline type
+
 #endif /* __OPTIMIZE__ */
 
 #define SET_ERROR_RET(err, msg) \
@@ -66,15 +77,15 @@ rand_ull(void)
     unsigned long long r = 0;
 
     /*
-    msb (max)   i*8
-    14            0
-    22            8
-    30           16
-    38           24
-    46           32
-    54           40
-    62           48
-    !!           56 (should not be reached)
+    msb (max)   i
+    14          0
+    22          8
+    30         16
+    38         24
+    46         32
+    54         40
+    62         48
+    !!         56 (should not be reached)
     */
     for (int i = 0; i < sizeof(unsigned long long) - 1; i++) {
         r = (r << 8) ^ rand();
