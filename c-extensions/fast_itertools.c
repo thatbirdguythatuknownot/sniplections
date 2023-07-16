@@ -128,7 +128,7 @@ get_sized_info(PyObject *it, sized_info *s)
     }
     else if (it_type == &PySeqIter_Type) {
         if (likely(((seqiterobject *)it)->it_seq != NULL)) {
-            int res = get_sized_info(((seqiterobject *)it)->it_seq, s);
+            SIZEDINFO_RET res = get_sized_info(((seqiterobject *)it)->it_seq, s);
             if (likely(s->size >= 0)) {
                 s->curidx = ((seqiterobject *)it)->it_index;
             }
@@ -145,8 +145,78 @@ get_sized_info(PyObject *it, sized_info *s)
     return LF_NONE;
 }
 
+Py_LOCAL_INLINE(Py_ssize_t)
+get_len_info(PyObject *it)
+{
+    PyTypeObject *it_type = Py_TYPE(it);
+    PySequenceMethods *sq;
+    PyMappingMethods *mp;
+
+    if (likely((sq = it_type->tp_as_sequence) && sq->sq_length)) {
+        return sq->sq_length(it);
+    }
+    if ((mp = it_type->tp_as_mapping) && mp->mp_length) {
+        return mp->mp_length(it);
+    }
+    if (it_type == &PySeqIter_Type) {
+        if (likely(((seqiterobject *)it)->it_seq != NULL)) {
+            return (get_len_info(((seqiterobject *)it)->it_seq)
+                    - ((seqiterobject *)it)->it_index);
+        }
+        return 0;
+    }
+    return -1;
+}
+
 PyDoc_STRVAR(reduce_doc, "Return state information for pickling.");
 PyDoc_STRVAR(setstate_doc, "Set state information for unpickling.");
+
+Py_LOCAL_INLINE(Py_ssize_t)
+long_to_ssize(PyObject *o, int *oflow)
+{
+    Py_ssize_t n, n_temp;
+    const Py_ssize_t long_arg_size = Py_SIZE(o);
+
+    if (likely(long_arg_size == 1)) {
+        n = ((PyLongObject *)o)->ob_digit[0];
+    }
+    else if (long_arg_size == 0) {
+        n = 0;
+    }
+    else {
+        const digit *ob_digit = ((PyLongObject *)o)->ob_digit;
+        switch (long_arg_size) {
+        case 2:
+            n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
+#if SIZEOF_SIZE_T == 8
+            break;
+        case 3:
+            n_temp = ((size_t)ob_digit[0]
+                      | (((size_t)ob_digit[1]
+                          | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
+#endif
+            if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
+#if SIZEOF_SIZE_T == 8
+                         ob_digit[2] >= 8))
+#else
+                         ob_digit[1] >= 2))
+#endif
+            {
+                goto overflow;
+            }
+            n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
+            break;
+        default:
+            goto overflow;
+        }
+    }
+
+    *oflow = 0;
+    return n;
+  overflow:
+    *oflow = 1;
+    return -1;
+}
 
 /* utilities END ************************************************************/
 
@@ -180,7 +250,7 @@ fast_itertools_chunked(PyObject *self,
     PyASCIIObject *kwname;
     void *kwname_data;
     Py_ssize_t i;
-    size_t n_temp;
+    int err;
     PyObject **kwnames_items;
     Py_ssize_t largs = nargs;
 
@@ -207,39 +277,9 @@ fast_itertools_chunked(PyObject *self,
         n_given = 1;
         n_arg = args[1];
         if (likely(PyLong_Check(n_arg))) {
-            const Py_ssize_t long_arg_size = Py_SIZE(n_arg);
-            if (likely(long_arg_size == 1)) {
-                n = ((PyLongObject *)n_arg)->ob_digit[0];
-            }
-            else if (long_arg_size == 0) {
-                n = 0;
-            }
-            else {
-                const digit *ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                switch (long_arg_size) {
-                case 2:
-                    n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
-#if SIZEOF_SIZE_T == 8
-                    break;
-                case 3:
-                    n_temp = ((size_t)ob_digit[0]
-                              | (((size_t)ob_digit[1]
-                                  | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
-#endif
-                    if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
-#if SIZEOF_SIZE_T == 8
-                                 ob_digit[2] >= 8))
-#else
-                                 ob_digit[1] >= 2))
-#endif
-                    {
-                        goto overflow_error;
-                    }
-                    n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
-                    break;
-                default:
-                    goto overflow_error;
-                }
+            n = long_to_ssize(n_arg, &err);
+            if (err) {
+                goto overflow_error;
             }
         }
         else if (n_arg == Py_None) {
@@ -299,39 +339,9 @@ fast_itertools_chunked(PyObject *self,
             }
             n_arg = args[nargs + i];
             if (likely(PyLong_Check(n_arg))) {
-                const Py_ssize_t long_arg_size = Py_SIZE(n_arg);
-                if (likely(long_arg_size == 1)) {
-                    n = ((PyLongObject *)n_arg)->ob_digit[0];
-                }
-                else if (long_arg_size == 0) {
-                    n = 0;
-                }
-                else {
-                    const digit *ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                    switch (long_arg_size) {
-                    case 2:
-                        n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
-    #if SIZEOF_SIZE_T == 8
-                        break;
-                    case 3:
-                        n_temp = ((size_t)ob_digit[0]
-                                  | (((size_t)ob_digit[1]
-                                      | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
-    #endif
-                        if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
-    #if SIZEOF_SIZE_T == 8
-                                     ob_digit[2] >= 8))
-    #else
-                                     ob_digit[1] >= 2))
-    #endif
-                        {
-                            goto overflow_error;
-                        }
-                        n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
-                        break;
-                    default:
-                        goto overflow_error;
-                    }
+                n = long_to_ssize(n_arg, &err);
+                if (err) {
+                    goto overflow_error;
                 }
             }
             else if (n_arg == Py_None) {
@@ -552,7 +562,7 @@ ichunk__new__(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     PyObject *iterable, *n_arg;
     Py_ssize_t n;
     int strict;
-    size_t n_temp;
+    int err;
 
     Py_ssize_t nargs = 0;
     if (likely(args != NULL)) {
@@ -560,39 +570,9 @@ ichunk__new__(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         if (likely(nargs == 2)) {
             n_arg = PyTuple_GET_ITEM(args, 1);
             if (likely(PyLong_Check(n_arg))) {
-                const Py_ssize_t long_arg_size = Py_SIZE(n_arg);
-                if (likely(long_arg_size == 1)) {
-                    n = ((PyLongObject *)n_arg)->ob_digit[0];
-                }
-                else if (long_arg_size == 0) {
-                    n = 0;
-                }
-                else {
-                    const digit *ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                    switch (long_arg_size) {
-                    case 2:
-                        n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
-    #if SIZEOF_SIZE_T == 8
-                        break;
-                    case 3:
-                        n_temp = ((size_t)ob_digit[0]
-                                  | (((size_t)ob_digit[1]
-                                      | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
-    #endif
-                        if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
-    #if SIZEOF_SIZE_T == 8
-                                     ob_digit[2] >= 8))
-    #else
-                                     ob_digit[1] >= 2))
-    #endif
-                        {
-                            goto overflow_error;
-                        }
-                        n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
-                        break;
-                    default:
-                        goto overflow_error;
-                    }
+                n = long_to_ssize(n_arg, &err);
+                if (err) {
+                    goto overflow_error;
                 }
             }
             else if (n_arg == Py_None) {
@@ -750,7 +730,7 @@ ichunk_reduce(ichunkobject *o, PyObject *Py_UNUSED(ignored))
 static PyObject *
 ichunk_setstate(ichunkobject *o, PyObject *num)
 {
-    size_t n_temp;
+    int err;
     Py_ssize_t n;
 
     if (unlikely(!PyLong_Check(num))) {
@@ -769,39 +749,9 @@ ichunk_setstate(ichunkobject *o, PyObject *num)
         return NULL;
     }
 
-    const Py_ssize_t long_arg_size = Py_SIZE(n_arg);
-    if (likely(long_arg_size == 1)) {
-        n = ((PyLongObject *)n_arg)->ob_digit[0];
-    }
-    else if (long_arg_size == 0) {
-        n = 0;
-    }
-    else {
-        const digit *ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-        switch (long_arg_size) {
-        case 2:
-            n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
-#if SIZEOF_SIZE_T == 8
-            break;
-        case 3:
-            n_temp = ((size_t)ob_digit[0]
-                      | (((size_t)ob_digit[1]
-                          | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
-#endif
-            if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
-#if SIZEOF_SIZE_T == 8
-                         ob_digit[2] >= 8))
-#else
-                         ob_digit[1] >= 2))
-#endif
-            {
-                goto invalid_argument;
-            }
-            n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
-            break;
-        default:
-            goto invalid_argument;
-        }
+    n = long_to_ssize(num, &err);
+    if (err) {
+        goto invalid_argument;
     }
 
     if (unlikely(n < o->cache_min_idx)) {
@@ -867,7 +817,7 @@ fast_itertools_ichunked(PyObject *self,
     PyASCIIObject *kwname;
     void *kwname_data;
     Py_ssize_t i;
-    size_t n_temp;
+    int err;
     PyObject **kwnames_items;
     Py_ssize_t largs = nargs;
 
@@ -888,39 +838,9 @@ fast_itertools_ichunked(PyObject *self,
         n_given = 1;
         n_arg = args[1];
         if (likely(PyLong_Check(n_arg))) {
-            const Py_ssize_t long_arg_size = Py_SIZE(n_arg);
-            if (likely(long_arg_size == 1)) {
-                n = ((PyLongObject *)n_arg)->ob_digit[0];
-            }
-            else if (long_arg_size == 0) {
-                n = 0;
-            }
-            else {
-                const digit *ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                switch (long_arg_size) {
-                case 2:
-                    n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
-#if SIZEOF_SIZE_T == 8
-                    break;
-                case 3:
-                    n_temp = ((size_t)ob_digit[0]
-                              | (((size_t)ob_digit[1]
-                                  | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
-#endif
-                    if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
-#if SIZEOF_SIZE_T == 8
-                                 ob_digit[2] >= 8))
-#else
-                                 ob_digit[1] >= 2))
-#endif
-                    {
-                        goto overflow_error;
-                    }
-                    n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
-                    break;
-                default:
-                    goto overflow_error;
-                }
+            n = long_to_ssize(n_arg, &err);
+            if (err) {
+                goto overflow_error;
             }
         }
         else if (n_arg == Py_None) {
@@ -972,39 +892,9 @@ fast_itertools_ichunked(PyObject *self,
             }
             n_arg = args[nargs + i];
             if (likely(PyLong_Check(n_arg))) {
-                const Py_ssize_t long_arg_size = Py_SIZE(n_arg);
-                if (likely(long_arg_size == 1)) {
-                    n = ((PyLongObject *)n_arg)->ob_digit[0];
-                }
-                else if (long_arg_size == 0) {
-                    n = 0;
-                }
-                else {
-                    const digit *ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                    switch (long_arg_size) {
-                    case 2:
-                        n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
-    #if SIZEOF_SIZE_T == 8
-                        break;
-                    case 3:
-                        n_temp = ((size_t)ob_digit[0]
-                                  | (((size_t)ob_digit[1]
-                                      | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
-    #endif
-                        if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
-    #if SIZEOF_SIZE_T == 8
-                                     ob_digit[2] >= 8))
-    #else
-                                     ob_digit[1] >= 2))
-    #endif
-                        {
-                            goto overflow_error;
-                        }
-                        n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
-                        break;
-                    default:
-                        goto overflow_error;
-                    }
+                n = long_to_ssize(n_arg, &err);
+                if (err) {
+                    goto overflow_error;
                 }
             }
             else if (n_arg == Py_None) {
@@ -1412,7 +1302,7 @@ fast_itertools_chunked_even(PyObject *self,
     PyASCIIObject *kwname;
     void *kwname_data;
     Py_ssize_t i;
-    size_t n_temp;
+    int err;
     PyObject **kwnames_items;
     Py_ssize_t largs = nargs;
     sized_info s;
@@ -1435,43 +1325,9 @@ fast_itertools_chunked_even(PyObject *self,
         n_given = 1;
         n_arg = args[1];
         if (likely(PyLong_Check(n_arg))) {
-            const Py_ssize_t long_arg_size = Py_SIZE(n_arg);
-            if (likely(long_arg_size == 1)) {
-                n = ((PyLongObject *)n_arg)->ob_digit[0];
-            }
-            else if (long_arg_size == 0) {
-                PyErr_Format(PyExc_ZeroDivisionError,
-                             "'n' argument for fast_itertools.chunked_even() cannot "
-                             "be zero (must be None or 1 <= n <= %zd)",
-                             PY_SSIZE_T_MAX);
-                goto error;
-            }
-            else {
-                const digit *ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                switch (long_arg_size) {
-                case 2:
-                    n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
-#if SIZEOF_SIZE_T == 8
-                    break;
-                case 3:
-                    n_temp = ((size_t)ob_digit[0]
-                              | (((size_t)ob_digit[1]
-                                  | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
-#endif
-                    if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
-#if SIZEOF_SIZE_T == 8
-                                 ob_digit[2] >= 8))
-#else
-                                 ob_digit[1] >= 2))
-#endif
-                    {
-                        goto overflow_error;
-                    }
-                    n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
-                    break;
-                default:
-                    goto overflow_error;
-                }
+            n = long_to_ssize(n_arg, &err);
+            if (err) {
+                goto overflow_error;
             }
         }
         else if (n_arg == Py_None) {
@@ -1519,43 +1375,9 @@ fast_itertools_chunked_even(PyObject *self,
             }
             n_arg = args[nargs + i];
             if (likely(PyLong_Check(n_arg))) {
-                const Py_ssize_t long_arg_size = Py_SIZE(n_arg);
-                if (likely(long_arg_size == 1)) {
-                    n = ((PyLongObject *)n_arg)->ob_digit[0];
-                }
-                else if (long_arg_size == 0) {
-                    PyErr_Format(PyExc_ZeroDivisionError,
-                                 "'n' argument for fast_itertools.chunked_even() cannot "
-                                 "be zero (must be None or 1 <= n <= %zd)",
-                                 PY_SSIZE_T_MAX);
-                    goto error;
-                }
-                else {
-                    const digit *ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                    switch (long_arg_size) {
-                    case 2:
-                        n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
-    #if SIZEOF_SIZE_T == 8
-                        break;
-                    case 3:
-                        n_temp = ((size_t)ob_digit[0]
-                                  | (((size_t)ob_digit[1]
-                                      | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
-    #endif
-                        if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
-    #if SIZEOF_SIZE_T == 8
-                                     ob_digit[2] >= 8))
-    #else
-                                     ob_digit[1] >= 2))
-    #endif
-                        {
-                            goto overflow_error;
-                        }
-                        n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
-                        break;
-                    default:
-                        goto overflow_error;
-                    }
+                n = long_to_ssize(n_arg, &err);
+                if (err) {
+                    goto overflow_error;
                 }
             }
             else if (n_arg == Py_None) {
@@ -1753,7 +1575,7 @@ PyDoc_STRVAR(chunked_even__doc__,
 
 /* .chunked_even() and chunked_even object END ******************************/
 
-/* .sliced() and sliced object ********************************************/
+/* .sliced() and sliced object **********************************************/
 
 static PyTypeObject sliced_type;
 
@@ -1829,7 +1651,7 @@ fast_itertools_sliced(PyObject *self,
     PyASCIIObject *kwname;
     void *kwname_data;
     Py_ssize_t i;
-    size_t n_temp;
+    int err;
     PyObject **kwnames_items;
     Py_ssize_t largs = nargs;
 
@@ -1856,39 +1678,9 @@ fast_itertools_sliced(PyObject *self,
         n_given = 1;
         n_arg = args[1];
         if (likely(PyLong_Check(n_arg))) {
-            const Py_ssize_t long_arg_size = Py_SIZE(n_arg);
-            if (likely(long_arg_size == 1)) {
-                n = ((PyLongObject *)n_arg)->ob_digit[0];
-            }
-            else if (long_arg_size == 0) {
-                n = 0;
-            }
-            else {
-                const digit *ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                switch (long_arg_size) {
-                case 2:
-                    n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
-#if SIZEOF_SIZE_T == 8
-                    break;
-                case 3:
-                    n_temp = ((size_t)ob_digit[0]
-                              | (((size_t)ob_digit[1]
-                                  | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
-#endif
-                    if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
-#if SIZEOF_SIZE_T == 8
-                                 ob_digit[2] >= 8))
-#else
-                                 ob_digit[1] >= 2))
-#endif
-                    {
-                        goto overflow_error;
-                    }
-                    n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
-                    break;
-                default:
-                    goto overflow_error;
-                }
+            n = long_to_ssize(n_arg, &err);
+            if (err) {
+                goto overflow_error;
             }
         }
         else if (n_arg == Py_None) {
@@ -1942,39 +1734,9 @@ fast_itertools_sliced(PyObject *self,
             }
             n_arg = args[nargs + i];
             if (likely(PyLong_Check(n_arg))) {
-                const Py_ssize_t long_arg_size = Py_SIZE(n_arg);
-                if (likely(long_arg_size == 1)) {
-                    n = ((PyLongObject *)n_arg)->ob_digit[0];
-                }
-                else if (long_arg_size == 0) {
-                    n = 0;
-                }
-                else {
-                    const digit *ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                    switch (long_arg_size) {
-                    case 2:
-                        n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
-#if SIZEOF_SIZE_T == 8
-                        break;
-                    case 3:
-                        n_temp = ((size_t)ob_digit[0]
-                                  | (((size_t)ob_digit[1]
-                                      | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
-#endif
-                        if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
- #if SIZEOF_SIZE_T == 8
-                                     ob_digit[2] >= 8))
-#else
-                                     ob_digit[1] >= 2))
-#endif
-                        {
-                            goto overflow_error;
-                        }
-                        n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
-                        break;
-                    default:
-                        goto overflow_error;
-                    }
+                n = long_to_ssize(n_arg, &err);
+                if (err) {
+                    goto overflow_error;
                 }
             }
             else if (n_arg == Py_None) {
@@ -2158,7 +1920,968 @@ PyDoc_STRVAR(sliced__doc__,
     This function will only work for iterables that support slicing.\n\
     For non-sliceable iterables, see :func:`fast_itertools.chunked`.\n");
 
-/* .sliced() and sliced object END ****************************************/
+/* .sliced() and sliced object END ******************************************/
+
+/* .constrained_batches() and constrained_batches object ********************/
+
+static PyTypeObject conbatches_type;
+
+typedef struct _conbatchesobject {
+    PyObject_HEAD;
+    PyObject *iterable;
+    PyObject *nextitem;
+    Py_ssize_t len_nextitem;
+    Py_ssize_t max_size;
+    Py_ssize_t max_count;
+    Py_ssize_t batch_size;
+    Py_ssize_t (*get_len)(struct _conbatchesobject *, PyObject *);
+    PyObject *supplied_len;
+    int strict;
+    int done;
+} conbatchesobject;
+
+Py_ssize_t
+len_default(conbatchesobject *Py_UNUSED(o), PyObject *el)
+{
+    Py_ssize_t n = get_len_info(el);
+    if (unlikely(n < 0)) {
+        PyErr_Format(PyExc_TypeError,
+                     "object of type '%.200s' has no len()",
+                     Py_TYPE(el)->tp_name);
+        return -1;
+    }
+    return n;
+}
+
+Py_ssize_t
+len_supplied(conbatchesobject *o, PyObject *el)
+{
+    PyObject *n_o = PyObject_CallOneArg(o->supplied_len, el);
+    if (unlikely(n_o == NULL)) {
+        return -1;
+    }
+    int err;
+    Py_ssize_t n = long_to_ssize(n_o, &err);
+    if (unlikely(n < 0)) {
+        if (err) {
+            PyErr_SetString(PyExc_OverflowError,
+                            "overflow while getting length");
+        }
+        else {
+            PyErr_Format(PyExc_TypeError,
+                         "object of type '%.200s' has invalid length",
+                         Py_TYPE(o)->tp_name);
+        }
+        return -1;
+    }
+    return n;
+}
+
+static PyObject *
+fast_itertools_constrained_batches(PyObject *self,
+                                   PyObject *const *args,
+                                   Py_ssize_t nargs,
+                                   PyObject *kwnames)
+{
+    PyObject *iterable = NULL;
+    int iterable_given = 0;
+    Py_ssize_t maxs, maxc = PY_SSIZE_T_MAX;
+    PyObject *maxs_arg, *maxc_arg = NULL;
+    int maxs_given = 0, maxc_given = 0;
+    PyObject *getlen_arg = NULL;
+    int getlen_given = 0;
+    int strict = 1;
+    int strict_given = 0;
+    Py_ssize_t nkwargs = 0;
+    Py_ssize_t kwname_length;
+    PyASCIIObject *kwname;
+    void *kwname_data;
+    Py_ssize_t i;
+    int err;
+    PyObject **kwnames_items;
+    Py_ssize_t largs = nargs;
+
+    if (kwnames) {
+        largs += (nkwargs = PyTuple_GET_SIZE(kwnames));
+        kwnames_items = ((PyTupleObject *)kwnames)->ob_item;
+    }
+    if (unlikely(largs < 2 || largs > 5)) {
+        PyErr_Format(PyExc_TypeError,
+                     "fast_itertools.constrained_batches() takes from 2 to 5 "
+                     "arguments (given %zd)",
+                     largs);
+        goto error;
+    }
+
+    switch (nargs) {
+    case 5:
+        strict_given = 1;
+        strict = PyObject_IsTrue(args[4]);
+        if (unlikely(strict < 0)) {
+            goto error;
+        }
+    case 4:
+        getlen_given = 1;
+        getlen_arg = args[3];
+        if (unlikely(!PyCallable_Check(getlen_arg))) {
+        PyErr_Format(PyExc_TypeError,
+                     "'get_len' argument for "
+                     "fast_itertools.constrained_batches() is not a callable",
+                     largs);
+            goto error;
+        }
+    case 3:
+        maxc_given = 1;
+        maxc_arg = args[2];
+        if (likely(PyLong_Check(maxc_arg))) {
+            maxc = long_to_ssize(maxc_arg, &err);
+            if (err) {
+                PyErr_Format(PyExc_ValueError,
+                             "'max_count' argument for "
+                             "fast_itertools.constrained_batches() "
+                             "must be None or an integer "
+                             "(0 <= max_count <= %zd)",
+                             PY_SSIZE_T_MAX);
+                goto error;
+            }
+        }
+        else if (maxc_arg == Py_None) {
+            maxc = PY_SSIZE_T_MAX;
+        }
+        else {
+            PyErr_Format(PyExc_ValueError,
+                         "'max_count' argument for "
+                         "fast_itertools.constrained_batches() "
+                         "must be None or an integer (0 <= max_count <= %zd)",
+                         PY_SSIZE_T_MAX);
+            goto error;
+        }
+    case 2:
+        maxs_given = 1;
+        maxs_arg = args[1];
+        if (likely(PyLong_Check(maxs_arg))) {
+            maxs = long_to_ssize(maxs_arg, &err);
+            if (err || maxs == 0) {
+                PyErr_Format(PyExc_ValueError,
+                             "'max_size' argument for "
+                             "fast_itertools.constrained_batches() must be "
+                             "an integer (1 <= max_size <= %zd)",
+                             PY_SSIZE_T_MAX);
+                goto error;
+            }
+        }
+        else {
+            PyErr_Format(PyExc_ValueError,
+                         "'max_size' argument for "
+                         "fast_itertools.constrained_batches() must be "
+                         "an integer (1 <= max_size <= %zd)",
+                         PY_SSIZE_T_MAX);
+            goto error;
+        }
+    case 1:
+        iterable_given = 1;
+        iterable = PyObject_GetIter(args[0]);
+        if (unlikely(iterable == NULL)) {
+            goto error;
+        }
+        break;
+    }
+
+    for (i = 0; i < nkwargs; i++) {
+        kwname_length = (kwname = (PyASCIIObject *)kwnames_items[i])->length;
+        kwname_data = PyUnicode_DATA(kwname);
+        if (unlikely(
+                kwname_length == 8 &&
+                memcmp(kwname_data, "iterable", 8) == 0
+            ))
+        {
+            if (unlikely(iterable_given == 1)) {
+                PyErr_SetString(PyExc_TypeError,
+                                "fast_itertools.constrained_batches() got "
+                                "multiple values for argument 'iterable'");
+                goto error;
+            }
+            iterable = PyObject_GetIter(args[nargs + i]);
+            if (unlikely(iterable == NULL)) {
+                goto error;
+            }
+        }
+        else if (
+                kwname_length == 8 &&
+                memcmp(kwname_data, "max_size", 8) == 0
+            )
+        {
+            if (unlikely(maxs_given == 1)) {
+                PyErr_SetString(PyExc_TypeError,
+                                "fast_itertools.constrained_batches() got "
+                                "multiple values for argument 'max_size'");
+                goto error;
+            }
+            maxs_arg = args[nargs + i];
+            if (likely(PyLong_Check(maxs_arg))) {
+                maxs = long_to_ssize(maxs_arg, &err);
+                if (err || maxs == 0) {
+                    PyErr_Format(PyExc_ValueError,
+                                 "'max_size' argument for "
+                                 "fast_itertools.constrained_batches() must be "
+                                 "an integer (1 <= max_size <= %zd)",
+                                 PY_SSIZE_T_MAX);
+                    goto error;
+                }
+            }
+            else {
+                PyErr_Format(PyExc_ValueError,
+                             "'max_size' argument for "
+                             "fast_itertools.constrained_batches() must be "
+                             "an integer (1 <= max_size <= %zd)",
+                             PY_SSIZE_T_MAX);
+                goto error;
+            }
+        }
+        else if (likely(
+                kwname_length == 9 &&
+                memcmp(kwname_data, "max_count", 9) == 0
+            ))
+        {
+            if (unlikely(maxc_given == 1)) {
+                PyErr_SetString(PyExc_TypeError,
+                                "fast_itertools.constrained_batches() got "
+                                "multiple values for argument 'max_count'");
+                goto error;
+            }
+            maxc_arg = args[nargs + i];
+            if (likely(PyLong_Check(maxc_arg))) {
+                maxc = long_to_ssize(maxc_arg, &err);
+                if (err) {
+                    PyErr_Format(PyExc_ValueError,
+                                 "'max_count' argument for "
+                                 "fast_itertools.constrained_batches() "
+                                 "must be None or an integer "
+                                 "(0 <= max_count <= %zd)",
+                                 PY_SSIZE_T_MAX);
+                    goto error;
+                }
+            }
+            else if (maxc_arg == Py_None) {
+                maxc = PY_SSIZE_T_MAX;
+            }
+            else {
+                PyErr_Format(PyExc_ValueError,
+                             "'max_count' argument for "
+                             "fast_itertools.constrained_batches() "
+                             "must be None or an integer (0 <= max_count <= %zd)",
+                             PY_SSIZE_T_MAX);
+                goto error;
+            }
+        }
+        else if (likely(
+                kwname_length == 7 &&
+                memcmp(kwname_data, "get_len", 7) == 0
+            ))
+        {
+            if (unlikely(getlen_given == 1)) {
+                PyErr_SetString(PyExc_TypeError,
+                                "fast_itertools.constrained_batches() got "
+                                "multiple values for argument 'get_len'");
+                goto error;
+            }
+            getlen_arg = args[nargs + i];
+            if (unlikely(!PyCallable_Check(getlen_arg))) {
+            PyErr_Format(PyExc_TypeError,
+                         "'get_len' argument for "
+                         "fast_itertools.constrained_batches() is not a callable",
+                         largs);
+                goto error;
+            }
+        }
+        else if (likely(
+                    kwname_length == 6 &&
+                    memcmp(kwname_data, "strict", 6) == 0
+                 ))
+        {
+            if (unlikely(strict_given == 1)) {
+                PyErr_SetString(PyExc_TypeError,
+                                "fast_itertools.constrained_batches() got "
+                                "multiple values for argument 'strict'");
+                goto error;
+            }
+            strict = PyObject_IsTrue(args[nargs + i]);
+            if (unlikely(strict < 0)) {
+                goto error;
+            }
+        }
+        else {
+            PyErr_Format(PyExc_TypeError,
+                         "fast_itertools.constrained_batches() got an "
+                         "unexpected keyword argument '%U'",
+                         kwname);
+            goto error;
+        }
+    }
+
+    conbatchesobject *res =
+        (conbatchesobject *)conbatches_type.tp_alloc(&conbatches_type, 0);
+    if (unlikely(res == NULL)) {
+        PyErr_NoMemory();
+        goto error;
+    }
+    res->iterable = iterable;
+    res->nextitem = NULL;
+    res->max_size = maxs;
+    res->max_count = maxc;
+    res->batch_size = maxc_arg ? maxc : maxs;
+    if (getlen_arg) {
+        res->get_len = len_supplied;
+        res->supplied_len = Py_NewRef(getlen_arg);
+    }
+    else {
+        res->get_len = len_default;
+        res->supplied_len = NULL;
+    }
+    res->strict = strict;
+    res->done = 0;
+    return (PyObject *)res;
+  error:
+    Py_XDECREF(iterable);
+    return NULL;
+}
+
+static void
+conbatches_dealloc(conbatchesobject *o)
+{
+    PyObject_GC_UnTrack(o);
+    Py_XDECREF(o->iterable);
+    Py_XDECREF(o->supplied_len);
+    Py_TYPE(o)->tp_free(o);
+}
+
+static int
+conbatches_traverse(conbatchesobject *o, visitproc visit, void *arg)
+{
+    Py_VISIT(o->iterable);
+    if (o->supplied_len) {
+        Py_VISIT(o->supplied_len);
+    }
+    return 0;
+}
+
+static PyObject *
+conbatches_next(conbatchesobject *o)
+{
+    PyObject *item, *iterable = o->iterable, **items;
+    Py_ssize_t m = o->max_size, n = o->batch_size;
+    int done = o->done;
+    Py_ssize_t i, j;
+    Py_ssize_t (*len)(struct _conbatchesobject *, PyObject *) = o->get_len;
+
+    if (unlikely(o->done)) {
+        PyErr_SetNone(PyExc_StopIteration);
+        return NULL;
+    }
+
+    PyObject *res = PyTuple_New(n);
+    if (unlikely(res == NULL)) {
+        return NULL;
+    }
+    items = _PyTuple_ITEMS(res);
+    if (o->nextitem) {
+        items[0] = o->nextitem;
+        i = 1;
+        j = o->len_nextitem;
+        o->nextitem = NULL;
+        o->len_nextitem = 0;
+    }
+    else {
+        i = 0;
+        j = 0;
+    }
+    iternextfunc it = Py_TYPE(iterable)->tp_iternext;
+    for (; i < n; i++) {
+        PyObject *item = it(iterable);
+        if (unlikely(item == NULL)) {
+            PyThreadState *tstate = _PyThreadState_GET();
+            PyObject *exc;
+            if ((exc = _PyErr_Occurred(tstate)) == NULL || exc &&
+                PyErr_GivenExceptionMatches(exc, PyExc_StopIteration))
+            {
+                o->done = 1;
+                if (i > 0) {
+                    if (unlikely(_PyTuple_Resize(&res, i) == -1)) {
+                        return NULL;
+                    }
+                    _PyErr_Restore(tstate, NULL, NULL, NULL);
+                    break;
+                }
+            }
+            goto error;
+        }
+        Py_ssize_t length = len(o, item);
+        if (unlikely(length == -1)) {
+            goto error;
+        }
+        if (o->strict && length > m) {
+            PyErr_SetString(PyExc_ValueError,
+                            "next(fast_itertools.constrained_batches()): "
+                            "item size exceeds maximum size");
+            goto error;
+        }
+        j += length;
+        if (unlikely(i && (i == n || j > m))) {
+            o->nextitem = item;
+            o->len_nextitem = length;
+            if (unlikely(_PyTuple_Resize(&res, i) == -1)) {
+                return NULL;
+            }
+            break;
+        }
+        items[i] = item;
+    }
+    return res;
+  error:
+    Py_DECREF(res);
+    return NULL;
+}
+
+static PyTypeObject conbatches_type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "fast_itertools.constrained_batches([], 0).__class__",
+    .tp_basicsize = sizeof(conbatchesobject),
+    .tp_dealloc = (destructor)conbatches_dealloc,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE |
+                    Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_IMMUTABLETYPE,
+    .tp_doc = "Base class for the result of fast_itertools.constrained_batches()",
+    .tp_traverse = (traverseproc)conbatches_traverse,
+    .tp_iter = PyObject_SelfIter,
+    .tp_iternext = (iternextfunc)conbatches_next,
+    .tp_alloc = PyType_GenericAlloc,
+    .tp_new = PyType_GenericNew,
+    .tp_free = PyObject_GC_Del,
+};
+
+PyDoc_STRVAR(constrained_batches__doc__,
+"constrained_batches(iterable, max_size, max_count=None, get_len=len, strict=True)\n\
+    Yield batches of items from *iterable* with a combined size limited by\n\
+    *max_size*.\n\
+\n\
+    >>> from fast_itertools import constrained_batches\n\
+    >>> iterable = [b'12345', b'123', b'12345678', b'1', b'1', b'12', b'1']\n\
+    >>> list(constrained_batches(iterable, 10))\n\
+    [(b'12345', b'123'), (b'12345678', b'1', b'1'), (b'12', b'1')]\n\
+\n\
+    If a *max_count* is supplied, the number of items per batch is also\n\
+    limited:\n\
+\n\
+    >>> iterable = [b'12345', b'123', b'12345678', b'1', b'1', b'12', b'1']\n\
+    >>> list(constrained_batches(iterable, 10, max_count = 2))\n\
+    [(b'12345', b'123'), (b'12345678', b'1'), (b'1', b'12'), (b'1',)]\n\
+\n\
+    If a *get_len* function is supplied, use that instead of :func:`len` to\n\
+    determine item size.\n\
+\n\
+    If *strict* is ``True``, raise ``ValueError`` if any single item is bigger\n\
+    than *max_size*. Otherwise, allow single items to exceed *max_size*.\n");
+
+/* .constrained_batches() and constrained_batches object END ****************/
+
+/* .distribute() and distributed object *************************************/
+
+static PyTypeObject distributed_type;
+
+typedef struct _distobj distributedobject;
+
+struct _distributed_state {
+    PyObject *iterable;
+    Py_ssize_t i; /* distobj idx where next item of iterable belongs to */
+    Py_ssize_t n; /* num of distobjs */
+    struct _distobj **objs;
+};
+
+typedef struct _distobj {
+    PyObject_HEAD;
+    int done;
+    Py_ssize_t id;
+    struct _distributed_state *state;
+    Py_ssize_t alloc_cache;
+    Py_ssize_t len_cache;
+    Py_ssize_t li;
+    Py_ssize_t ri;
+    PyObject **cache; /* dynamic circular queue */
+} distributedobject;
+
+static void
+distobj_dealloc(distributedobject *o)
+{
+    Py_ssize_t i, n = o->state->n;
+    Py_ssize_t actives = 0;
+    for (i = 0; i < o->id; ++i) {
+        actives += o->state->objs[i] != NULL;
+    }
+    while (++i < n) {
+        actives += o->state->objs[i] != NULL;
+    }
+    if (actives) {
+        o->state->objs[o->id] = NULL;
+    }
+    else {
+        Py_XDECREF(o->state->iterable);
+        PyMem_Free(o->state->objs);
+        PyMem_Free(o->state);
+    }
+    if (o->len_cache) {
+        i = o->li;
+        if (o->ri >= o->li) {
+            for (; i <= o->ri; ++i) {
+                Py_DECREF(o->cache[i]);
+            }
+        }
+        else {
+            for (; i < o->alloc_cache; ++i) {
+                Py_DECREF(o->cache[i]);
+            }
+            for (i = 0; i <= o->ri; ++i) {
+                Py_DECREF(o->cache[i]);
+            }
+        }
+        PyMem_Free(o->cache);
+    }
+    PyObject_GC_UnTrack(o);
+    Py_TYPE(o)->tp_free(o);
+}
+
+static int
+distobj_traverse(distributedobject *o, visitproc visit, void *arg)
+{
+    Py_VISIT(o->state->iterable);
+    return 0;
+}
+
+Py_LOCAL_INLINE(int)
+cache_resize(distributedobject *o, Py_ssize_t newsize)
+{
+    /* Follows the Python list growth pattern. */
+    size_t new_alloc;
+    PyObject **items;
+    int compress = 0;
+
+    if (o->alloc_cache >= newsize) {
+        if (newsize >= (o->alloc_cache >> 2)) {
+            o->len_cache = newsize;
+            return 0;
+        }
+        compress = 1;
+    }
+
+    if (unlikely(newsize == 0)) {
+        new_alloc = 0;
+    }
+    else {
+        new_alloc = ((size_t)newsize + (newsize >> 3) + 6) & ~(size_t)3;
+        if (newsize - o->len_cache > (Py_ssize_t)(new_alloc - newsize)) {
+            new_alloc = ((size_t)newsize + 3) & ~(size_t)3;
+        }
+    }
+    if (new_alloc <= (size_t)PY_SSIZE_T_MAX / sizeof(PyObject *)) {
+        if (new_alloc == o->alloc_cache) {
+            o->len_cache = newsize;
+            return 0;
+        }
+        if (new_alloc && o->cache) {
+            /* Compress/expand the cache. */
+            if (o->li) {
+                if (o->ri >= o->li) {
+                    o->ri -= o->li;
+                    memmove(o->cache,
+                            o->cache + o->li,
+                            (o->ri + 1) * sizeof(PyObject *));
+                    o->li = 0;
+                }
+                else if (compress) {
+                    if (o->ri < o->li - 1) {
+                        memmove(o->cache + o->ri + 1,
+                                o->cache + o->li,
+                                (o->alloc_cache - o->li) * sizeof(PyObject *));
+                        o->li = o->ri + 1;
+                    }
+                }
+                else {
+                    Py_ssize_t prev_li = o->li;
+                    o->li += new_alloc - o->alloc_cache;
+                    memmove(o->cache + o->li,
+                            o->cache + prev_li,
+                            (o->alloc_cache - prev_li) * sizeof(PyObject *));
+                }
+            }
+            items = PyMem_Realloc(o->cache, new_alloc * sizeof(PyObject *));
+        }
+        else {
+            items = PyMem_Malloc(new_alloc * sizeof(PyObject *));
+        }
+    }
+    else {
+        items = NULL;
+    }
+    if (unlikely(items == NULL)) {
+        return 1;
+    }
+
+    o->cache = items;
+    o->len_cache = newsize;
+    o->alloc_cache = new_alloc;
+    return 0;
+}
+
+Py_LOCAL_INLINE(int)
+cache_pop(distributedobject *o, PyObject **item)
+{
+    if (o->len_cache) {
+        Py_ssize_t prev_li = o->li;
+        *item = o->cache[o->li++];
+        if (o->li == o->alloc_cache) {
+            o->li = 0;
+        }
+        assert(o->li < o->alloc_cache);
+        if (cache_resize(o, o->len_cache - 1)) {
+            o->li = prev_li;
+            *item = NULL;
+            return 1;
+        }
+        return 0;
+    }
+    *item = NULL;
+    return 0;
+}
+
+Py_LOCAL_INLINE(int)
+cache_push(distributedobject *o, PyObject *item)
+{
+    if (cache_resize(o, o->len_cache + 1)) {
+        return 1;
+    }
+    if (o->ri == o->alloc_cache) {
+        o->ri = 0;
+    }
+    assert(o->ri < o->alloc_cache);
+    o->cache[o->ri++] = item;
+    return 0;
+}
+
+PyObject *
+distobj_next(distributedobject *o)
+{
+    PyObject *item;
+
+    if (unlikely(o->done)) {
+        PyErr_SetNone(PyExc_StopIteration);
+        return NULL;
+    }
+
+    if (cache_pop(o, &item)) {
+        PyErr_NoMemory();
+        return NULL;
+    }
+    else if (item) {
+        return item;
+    }
+
+    struct _distributed_state *s = o->state;
+
+    Py_ssize_t i = s->i;
+    PyObject *it = s->iterable;
+
+    if (unlikely(it == NULL)) {
+        o->done = 1;
+        PyErr_SetNone(PyExc_StopIteration);
+        return NULL;
+    }
+
+    iternextfunc func = Py_TYPE(it)->tp_iternext;
+
+#define GET_ITEM \
+    item = func(it); \
+    if (unlikely(item == NULL)) { \
+        PyThreadState *tstate = _PyThreadState_GET(); \
+        PyObject *exc; \
+        if ((exc = _PyErr_Occurred(tstate)) == NULL || exc && \
+            PyErr_GivenExceptionMatches(exc, PyExc_StopIteration)) \
+        { \
+            o->done = 1; \
+            Py_DECREF(s->iterable); \
+            s->iterable = NULL; \
+        } \
+        return NULL; \
+    } \
+
+    if (i > o->id) {
+        for (; i < s->n; ++i) {
+            GET_ITEM
+            distributedobject *x = s->objs[i];
+            if (unlikely(x == NULL)) {
+                Py_DECREF(item);
+                continue;
+            }
+            if (cache_push(x, item)) {
+                Py_DECREF(item);
+                PyErr_NoMemory();
+                return NULL;
+            }
+        }
+        i = 0;
+    }
+
+    for (; i < o->id; ++i) {
+        GET_ITEM
+        distributedobject *x = s->objs[i];
+        if (unlikely(x == NULL)) {
+            Py_DECREF(item);
+            continue;
+        }
+        if (cache_push(x, item)) {
+            Py_DECREF(item);
+            PyErr_NoMemory();
+            return NULL;
+        }
+    }
+
+    GET_ITEM
+    s->i = (o->id + 1) % s->n;
+    return item;
+#undef GET_ITEM
+}
+
+static PyTypeObject distributed_type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "fast_itertools.distribute(1, [])[0].__class__",
+    .tp_basicsize = sizeof(distributedobject),
+    .tp_dealloc = (destructor)distobj_dealloc,
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE |
+                    Py_TPFLAGS_HAVE_GC | Py_TPFLAGS_IMMUTABLETYPE |
+                    Py_TPFLAGS_DISALLOW_INSTANTIATION,
+    .tp_doc = "Base class for the iterators in the result of "
+              "fast_itertools.distribute()",
+    .tp_traverse = (traverseproc)distobj_traverse,
+    .tp_iter = PyObject_SelfIter,
+    .tp_iternext = (iternextfunc)distobj_next,
+    .tp_alloc = PyType_GenericAlloc,
+    .tp_new = NULL,
+    .tp_free = PyObject_GC_Del,
+};
+
+static PyObject *
+fast_itertools_distribute(PyObject *self,
+                          PyObject *const *args,
+                          Py_ssize_t nargs,
+                          PyObject *kwnames)
+{
+    PyObject *res = NULL, *iterable = NULL;
+    int iterable_given = 0;
+    Py_ssize_t n;
+    PyObject *n_arg;
+    int n_given = 0;
+    struct _distributed_state *global_state = NULL;
+    Py_ssize_t nkwargs = 0;
+    Py_ssize_t kwname_length;
+    PyASCIIObject *kwname;
+    void *kwname_data;
+    Py_ssize_t i;
+    int err;
+    PyObject **kwnames_items;
+    Py_ssize_t largs = nargs;
+
+    if (kwnames) {
+        largs += (nkwargs = PyTuple_GET_SIZE(kwnames));
+        kwnames_items = ((PyTupleObject *)kwnames)->ob_item;
+    }
+    if (unlikely(largs != 2)) {
+        PyErr_Format(PyExc_TypeError,
+                     "fast_itertools.distribute() takes 2 "
+                     "arguments (given %zd)",
+                     largs);
+        goto error;
+    }
+
+    switch (nargs) {
+    case 2:
+        iterable_given = 1;
+        iterable = PyObject_GetIter(args[1]);
+        if (unlikely(iterable == NULL)) {
+            goto error;
+        }
+    case 1:
+        n_given = 1;
+        n_arg = args[0];
+        if (likely(PyLong_Check(n_arg))) {
+            n = long_to_ssize(n_arg, &err);
+            if (err) {
+                goto overflow_error;
+            }
+            if (unlikely(n < 1)) {
+                PyErr_Format(PyExc_ValueError,
+                             "'n' argument for fast_itertools.distribute() "
+                             "must be an integer (1 <= n <= %zd)",
+                             PY_SSIZE_T_MAX);
+                goto error;
+            }
+        }
+        else {
+            PyErr_Format(PyExc_ValueError,
+                         "'n' argument for fast_itertools.distribute() must "
+                         "be an integer (1 <= n <= %zd)",
+                         PY_SSIZE_T_MAX);
+            goto error;
+        }
+    }
+
+    for (i = 0; i < nkwargs; i++) {
+        kwname_length = (kwname = (PyASCIIObject *)kwnames_items[i])->length;
+        kwname_data = PyUnicode_DATA(kwname);
+        if (unlikely(
+                kwname_length == 8 &&
+                memcmp(kwname_data, "iterable", 8) == 0
+            ))
+        {
+            if (unlikely(iterable_given == 1)) {
+                PyErr_SetString(PyExc_TypeError,
+                                "fast_itertools.chunked() got multiple values "
+                                "for argument 'iterable'");
+                goto error;
+            }
+            iterable = PyObject_GetIter(args[nargs + i]);
+            if (unlikely(iterable == NULL)) {
+                goto error;
+            }
+        }
+        else if (likely(
+                    kwname_length == 1 &&
+                    *((char *)kwname_data) == 'n'
+                 ))
+        {
+            if (unlikely(n_given == 1)) {
+                PyErr_SetString(PyExc_TypeError,
+                                "fast_itertools.distribute() got multiple values "
+                                "for argument 'n'");
+                goto error;
+            }
+            n_arg = args[nargs + i];
+            if (likely(PyLong_Check(n_arg))) {
+                n = long_to_ssize(n_arg, &err);
+                if (err) {
+                    goto overflow_error;
+                }
+                if (unlikely(n < 1)) {
+                    PyErr_Format(PyExc_ValueError,
+                                 "'n' argument for fast_itertools.distribute() "
+                                 "must be an integer (1 <= n <= %zd)",
+                                 PY_SSIZE_T_MAX);
+                    goto error;
+                }
+            }
+            else {
+                PyErr_Format(PyExc_ValueError,
+                             "'n' argument for fast_itertools.distribute() must "
+                             "be an integer (1 <= n <= %zd)",
+                             PY_SSIZE_T_MAX);
+                goto error;
+            }
+        }
+        else {
+            PyErr_Format(PyExc_TypeError,
+                         "fast_itertools.distribute() got an unexpected "
+                         "keyword argument '%U'",
+                         kwname);
+            goto error;
+        }
+    }
+
+    res = PyList_New(n);
+    if (unlikely(res == NULL)) {
+        PyErr_NoMemory();
+        goto error;
+    }
+    PyObject **items = _PyList_ITEMS(res);
+
+    global_state = PyMem_Malloc(sizeof *global_state);
+    if (unlikely(global_state == NULL)) {
+        PyErr_NoMemory();
+        goto error;
+    }
+    global_state->iterable = iterable;
+    global_state->i = 0;
+    global_state->n = n;
+    global_state->objs = PyMem_Malloc(n * sizeof(distributedobject *));
+    if (unlikely(global_state->objs == NULL)) {
+        PyErr_NoMemory();
+        goto error;
+    }
+
+    for (i = 0; i < n; ++i) {
+        distributedobject *item =
+            (distributedobject *)distributed_type.tp_alloc(&distributed_type, 0);
+        if (unlikely(item == NULL)) {
+            PyErr_NoMemory();
+            goto error;
+        }
+        item->done = 0;
+        item->id = i;
+        item->state = global_state;
+        item->alloc_cache = 0;
+        item->len_cache = 0;
+        item->li = 0;
+        item->ri = 0;
+        item->cache = NULL;
+        global_state->objs[i] = item; /* Steal the reference to avoid
+                                         memory leaking after the list is
+                                         dealloc'd */
+        items[i] = (PyObject *)item;
+    }
+
+    return res;
+overflow_error:
+    PyErr_Format(PyExc_OverflowError,
+                 "'n' argument for fast_itertools.distribute() must "
+                 "be a positive number <= %zd and >= 1",
+                 PY_SSIZE_T_MAX);
+  error:
+    Py_XDECREF(iterable);
+    if (global_state) {
+        if (global_state->objs) {
+            PyMem_Free(global_state->objs);
+        }
+        PyMem_Free(global_state);
+    }
+    Py_XDECREF(res);
+    return NULL;
+}
+
+PyDoc_STRVAR(distribute__doc__,
+"distribute(n, iterable)\n\
+    Distribute the items from *iterable* among *n* smaller iterables.\n\
+\n\
+        >>> from fast_itertools import distribute\n\
+        >>> group_1, group_2 = distribute(2, [1, 2, 3, 4, 5, 6])\n\
+        >>> list(group_1)\n\
+        [1, 3, 5]\n\
+        >>> list(group_2)\n\
+        [2, 4, 6]\n\
+\n\
+    If the length of *iterable* is not evenly divisible by *n*, then the\n\
+    length of the returned iterables will not be identical:\n\
+\n\
+        >>> children = distribute(3, [1, 2, 3, 4, 5, 6, 7])\n\
+        >>> [list(c) for c in children]\n\
+        [[1, 4, 7], [2, 5], [3, 6]]\n\
+\n\
+    If the length of *iterable* is smaller than *n*, then the last returned\n\
+    iterables will be empty:\n\
+\n\
+        >>> children = distribute(5, [1, 2, 3])\n\
+        >>> [list(c) for c in children]\n\
+        [[1], [2], [3], [], []]\n\
+\n\
+    This function uses a cache for values and may require significant\n\
+    storage. If you need the order items in the smaller iterables to match the\n\
+    original iterable, see :func:`divide`.\n");
+
+/* .distribute() and distributed object END *********************************/
 
 /* .take() ******************************************************************/
 
@@ -2177,7 +2900,8 @@ fast_itertools_take(PyObject *self,
     int iterable_given = 0, n_given = 0, is_list = 0;
     int cmp0, cmp1;
     Py_ssize_t i, j, n, kwname_length, nkwargs = 0, largs = nargs;
-    size_t n_temp, size;
+    int err;
+    size_t size;
 
     if (kwnames) {
         largs += (nkwargs = PyTuple_GET_SIZE(kwnames));
@@ -2196,39 +2920,9 @@ fast_itertools_take(PyObject *self,
         n_given = 1;
         n_arg = args[1];
         if (likely(PyLong_Check(n_arg))) {
-            const Py_ssize_t long_arg_size = Py_SIZE(n_arg);
-            if (likely(long_arg_size == 1)) {
-                n = ((PyLongObject *)n_arg)->ob_digit[0];
-            }
-            else if (long_arg_size == 0) {
-                return PyList_New(0);
-            }
-            else {
-                const digit *ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                switch (long_arg_size) {
-                case 2:
-                    n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
-#if SIZEOF_SIZE_T == 8
-                    break;
-                case 3:
-                    n_temp = ((size_t)ob_digit[0]
-                              | (((size_t)ob_digit[1]
-                                  | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
-#endif
-                    if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
-#if SIZEOF_SIZE_T == 8
-                                 ob_digit[2] >= 8))
-#else
-                                 ob_digit[1] >= 2))
-#endif
-                    {
-                        goto overflow_error;
-                    }
-                    n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
-                    break;
-                default:
-                    goto overflow_error;
-                }
+            n = long_to_ssize(n_arg, &err);
+            if (err) {
+                goto overflow_error;
             }
         }
         else if (n_arg == Py_None) {
@@ -2274,39 +2968,9 @@ fast_itertools_take(PyObject *self,
             }
             n_arg = args[nargs + i];
             if (likely(PyLong_Check(n_arg))) {
-                const Py_ssize_t long_arg_size = Py_SIZE(n_arg);
-                if (likely(long_arg_size == 1)) {
-                    n = ((PyLongObject *)n_arg)->ob_digit[0];
-                }
-                else if (long_arg_size == 0) {
-                    return PyList_New(0);
-                }
-                else {
-                    const digit *ob_digit = ((PyLongObject *)n_arg)->ob_digit;
-                    switch (long_arg_size) {
-                    case 2:
-                        n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
-#if SIZEOF_SIZE_T == 8
-                        break;
-                    case 3:
-                        n_temp = ((size_t)ob_digit[0]
-                                  | (((size_t)ob_digit[1]
-                                      | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
-#endif
-                        if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
- #if SIZEOF_SIZE_T == 8
-                                     ob_digit[2] >= 8))
-#else
-                                     ob_digit[1] >= 2))
-#endif
-                        {
-                            goto overflow_error;
-                        }
-                        n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
-                        break;
-                    default:
-                        goto overflow_error;
-                    }
+                n = long_to_ssize(n_arg, &err);
+                if (err) {
+                    goto overflow_error;
                 }
             }
             else if (n_arg == Py_None) {
@@ -2622,6 +3286,10 @@ static PyMethodDef fast_itertools_methods[] = {
      chunked_even__doc__},
     {"sliced", (PyCFunction)fast_itertools_sliced, METH_FASTCALL | METH_KEYWORDS,
      sliced__doc__},
+    {"constrained_batches", (PyCFunction)fast_itertools_constrained_batches, METH_FASTCALL | METH_KEYWORDS,
+     constrained_batches__doc__},
+    {"distribute", (PyCFunction)fast_itertools_distribute, METH_FASTCALL | METH_KEYWORDS,
+     distribute__doc__},
     {"take", (PyCFunction)fast_itertools_take, METH_FASTCALL | METH_KEYWORDS,
      take__doc__},
     {NULL}
