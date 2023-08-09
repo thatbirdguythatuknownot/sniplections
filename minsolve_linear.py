@@ -10,10 +10,13 @@ def solve(a, x, y):
     https://stackoverflow.com/questions/27458157
     https://math.stackexchange.com/questions/2674368
     """
-    ox, oy = x, y
-    x0, x1, y0, y1 = (1, 0, 0, 1)
+    ox = x
+    oy = y
+    x0 = y1 = 1
+    x1 = y0 = 0
     while y:
-        x, q, y = y, x // y, x % y
+        q = x // y
+        x, y = y, x % y
         x0, x1 = x1, x0 - q*x1
         y0, y1 = y1, y0 - q*y1
     if x != 1:
