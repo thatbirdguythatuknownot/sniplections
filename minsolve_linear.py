@@ -5,6 +5,10 @@ def solve(a, x, y):
     Solve the linear equation Ax + By = C
         (order of parameters to function are C, A, B)
         such that (x, y) has the minimum possible distance to (0, 0)
+
+    https://github.com/lapets/egcd/blob/main/src/egcd/egcd.py
+    https://stackoverflow.com/questions/27458157
+    https://math.stackexchange.com/questions/2674368
     """
     ox, oy = x, y
     x0, x1, y0, y1 = (1, 0, 0, 1)
