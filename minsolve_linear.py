@@ -1,4 +1,4 @@
-from math import dist, gcd
+from math import gcd, hypot
 
 def solve(a, x, y):
     """
@@ -13,47 +13,57 @@ def solve(a, x, y):
     ox, oy = x, y
     x0, x1, y0, y1 = (1, 0, 0, 1)
     while y:
-        x, (q, y) = y, divmod(x, y)
+        x, q, y = y, x // y, x % y
         x0, x1 = x1, x0 - q*x1
         y0, y1 = y1, y0 - q*y1
-    if a % x:
-        raise ValueError(f"impossible to solve {ox}x + {oy}y = {a}")
-    a //= x
+    if x != 1:
+        if a % x:
+            raise ValueError(f"impossible to solve {ox}x + {oy}y = {a}")
+        a //= x
     x0 *= a
     y0 *= a
     xygcd = gcd(ox, oy)
-    xm, ym = -ox // xygcd, oy // xygcd
-    t = x0 + ym, y0 + xm
-    td = dist(t, (0, 0))
-    d = dist(res := (x0, y0), (0, 0))
+    xm = -ox // xygcd
+    ym = oy // xygcd
+    rx0 = x0
+    ry0 = y0
+    d = hypot(x0, y0)
+    x0 += ym
+    y0 += xm
+    td = hypot(x0, y0)
     if cond := xm > 0 < ym or xm < 0 > ym:
         if td >= d:
-            t = x0 - ym, y0 - xm
-            td = dist(t, (0, 0))
+            x0 = rx0 - ym
+            y0 = ry0 - xm
+            td = hypot(x0, y0)
             if td >= d:
                 return res
             xm = -xm
             ym = -ym
     else:
         od = d
-        ox0 = x0
-        oy0 = y0
+        ox0 = rx0
+        oy0 = ry0
     while td < d:
         d = td
-        x0, y0 = res = t
-        t = x0 + ym, y0 + xm
-        td = dist(t, (0, 0))
+        rx0 = x0
+        ry0 = y0
+        x0 += ym
+        y0 += xm
+        td = hypot(x0, y0)
     if not cond:
-        d2 = od
-        x0 = ox0
-        y0 = oy0
-        t = x0 - ym, y0 - xm
-        td2 = dist(t, (0, 0))
-        while td2 < d2:
-            d2 = td2
-            x0, y0 = t
-            t = x0 - ym, y0 - xm
-            td2 = dist(t, (0, 0))
+        r2x0 = ox0
+        r2y0 = oy0
+        ox0 -= ym
+        oy0 -= xm
+        td2 = hypot(ox0, oy0)
+        while td2 < od:
+            od = td2
+            r2x0 = ox0
+            r2y0 = oy0
+            ox0 -= ym
+            oy0 -= xm
+            td2 = hypot(ox0, oy0)
         if td2 <= td:
-            return x0, y0
-    return res
+            return r2x0, r2y0
+    return rx0, ry0
