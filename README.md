@@ -335,3 +335,12 @@ def MyClass():
 a = MyClass(1, 2)
 print(a.sum()) # 3
 ```
+
+**minsolve_linear.py**<br/>
+Solve the equation `Ax + By = C` in a way that `(x, y)` has the minimum possible distance to `(0, 0)`. Example:
+```py
+from minsolve_linear import solve
+
+# solve 8x - 2y = 14
+print(solve(14, 8, -2)) # (2, 1)
+```
