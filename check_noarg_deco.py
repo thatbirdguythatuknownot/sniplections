@@ -1,10 +1,14 @@
-from sys import _getframe
+from sys import _getframe, version_info as PYVER
 from opcode import (_inline_cache_entries as ICE, EXTENDED_ARG, opmap,
                     stack_effect, HAVE_ARGUMENT)
 
 CACHE = opmap['CACHE']
-PRECALL = opmap['PRECALL']
-LENICE_PRECALL = ICE[PRECALL] * 2
+if NO_312 := PYVER < (3, 12):
+    PRECALL = opmap['PRECALL']
+    LEN_PRECALL = ICE[PRECALL] * 2 + 2
+else:
+    LEN_PRECALL = 0
+
 CALL = opmap['CALL']
 ICE_CALL = ICE[CALL]
 LENICE_CALL = ICE_CALL * 2
@@ -21,7 +25,7 @@ def check_noarg_deco():
     op = f.f_lasti - LENICE_CALL
     if code[op] is not CALL or code[op + 1]:
         return False
-    op -= LENICE_PRECALL + 4
+    op -= LEN_PRECALL + 2
     if code[op] is CACHE:
         ncaches = 0
         while op >= 0:
@@ -31,13 +35,13 @@ def check_noarg_deco():
             if ncaches is ICE_CALL and code[op] is CALL:
                 if not code[op + 1]:
                     ncaches = 0
-                    op -= LENICE_PRECALL + 4
+                    op -= LEN_PRECALL + 2
                     continue
             break
         if (op >= 0 and ncaches is ICE_CALL and code[op] is CALL
                 and code[op + 1] >= 2):
             stacklevel = -code[op + 1]
-            op -= LENICE_PRECALL + 4
+            op -= LEN_PRECALL + 2
             while op >= 0:
                 pos = op - 2
                 if code[op] >= HAVE_ARGUMENT:
