@@ -850,13 +850,15 @@ nyaify_impl(PyObject *text)
             res += kind;
             sn--;
         }
-        if (any_checkchar(sbuf, 0, 'a', kind) ||
-            any_checkchar(sbuf, 0, 'e', kind) ||
-            any_checkchar(sbuf, 0, 'i', kind) ||
-            any_checkchar(sbuf, 0, 'o', kind) ||
-            any_checkchar(sbuf, 0, 'u', kind))
+        if (sn > 0 && (
+                any_checkchar(sbuf, 0, 'a', kind) ||
+                any_checkchar(sbuf, 0, 'e', kind) ||
+                any_checkchar(sbuf, 0, 'i', kind) ||
+                any_checkchar(sbuf, 0, 'o', kind) ||
+                any_checkchar(sbuf, 0, 'u', kind)))
         {
-            if (!any_checkchar(sbuf, 1, 'a', kind) &&
+            if (sn < 2 ||
+                !any_checkchar(sbuf, 1, 'a', kind) &&
                 !any_checkchar(sbuf, 1, 'e', kind) &&
                 !any_checkchar(sbuf, 1, 'o', kind) &&
                 !any_checkchar(sbuf, 1, 'u', kind))
@@ -875,6 +877,10 @@ nyaify_impl(PyObject *text)
         memcpy(res, sbuf, kind * sn);
     }
 
+    if (UNLIKELY(count == 0)) {
+        Py_DECREF(u);
+        return Py_NewRef(text);
+    }
     if (count != n) {
         if (UNLIKELY(PyUnicode_Resize(&u, ol + count) < 0)) {
             return NULL;
@@ -904,14 +910,14 @@ PyDoc_STRVAR(nyaify__doc__,
 LOCAL(PyObject *)
 char_replace_impl(PyObject *text)
 {
-    Py_ssize_t pi, i, j, sn;
+    Py_ssize_t pi, i, j, sn, on;
     int kind, no_lb = 1;
     char *res;
     const char *sbuf;
     Py_UCS1 chtmp, ch1 = 'l', ch2 = 'r';
     PyObject *u;
 
-    sn = PyUnicode_GET_LENGTH(text);
+    sn = on = PyUnicode_GET_LENGTH(text);
     if (UNLIKELY(sn < 3)) {
         return Py_NewRef(text);
     }
@@ -969,6 +975,10 @@ redo:
 
 end:
     if (sn > 0) {
+        if (sn == on) {
+            Py_DECREF(u);
+            return Py_NewRef(text);
+        }
         memcpy(res, sbuf, kind * sn);
     }
 
@@ -993,23 +1003,23 @@ PyDoc_STRVAR(char_replace__doc__,
     Replace certain characters with 'w'.\n");
 
 LOCAL(PyObject *)
-stutter_impl(PyObject *text, float strength)
+stutter_impl(PyObject *text, float *strength_p)
 {
     Py_ssize_t maxchar, i, count, sn, ol, n, new_size;
     int kind;
+    float strength = *strength_p;
     char *res;
     const char *sbuf;
     PyObject *u;
 
     if (UNLIKELY(strength <= 0. || isnan(strength))) {
+        *strength_p = 0.;
         return Py_NewRef(text);
-    }
-    else if (strength >= 1.) {
-        strength = 1.;
     }
 
     ol = sn = PyUnicode_GET_LENGTH(text);
     if (UNLIKELY(sn == 0)) {
+        *strength_p = 0.;
         return Py_NewRef(text);
     }
 
@@ -1037,6 +1047,7 @@ stutter_impl(PyObject *text, float strength)
     int start_stutter;
     if ((start_stutter = isalpha(ch) && rand_double() < strength)) {
         new_size += 2;
+        ++n;
     }
     u = PyUnicode_New(new_size, maxchar);
     if (UNLIKELY(!u)) return NULL;
@@ -1063,7 +1074,10 @@ stutter_impl(PyObject *text, float strength)
             res += kind;
             sn--;
         }
-        if (any_charisalpha(sbuf, 0, kind) && rand_double() < strength) {
+        if (sn > 0 &&
+            any_charisalpha(sbuf, 0, kind) &&
+            rand_double() < strength)
+        {
             Py_UCS4 ch = any_getchar(sbuf, 0, kind);
             any_setchar(res, 0, ch, kind);
             any_setchar(res, 1, '-', kind);
@@ -1079,6 +1093,10 @@ stutter_impl(PyObject *text, float strength)
         memcpy(res, sbuf, kind * sn);
     }
 
+    if (UNLIKELY(count == 0)) {
+        Py_DECREF(u);
+        return Py_NewRef(text);
+    }
     if (count != n) {
         if (UNLIKELY(PyUnicode_Resize(&u, ol + count+count) < 0)) {
             return NULL;
@@ -1192,7 +1210,7 @@ stutter(PyObject *Py_UNUSED(_),
         return Py_NewRef(text);
     }
 
-    return stutter_impl(text, strength);
+    return stutter_impl(text, &strength);
 }
 
 PyDoc_STRVAR(stutter__doc__,
@@ -1240,24 +1258,24 @@ static struct {
 };
 
 LOCAL(PyObject *)
-emoji_impl(PyObject *text, float strength)
+emoji_impl(PyObject *text, float *strength_p)
 {
     unsigned long long r;
     Py_ssize_t maxchar, uchar, uchar2, i, count, sn, ol, n, new_size;
     int kind, ukind;
+    float strength = *strength_p;
     char *res;
     const char *sbuf;
     PyObject *u, *u2;
 
     if (UNLIKELY(strength <= 0. || isnan(strength))) {
+        *strength_p = 0.;
         return Py_NewRef(text);
-    }
-    else if (strength >= 1.) {
-        strength = 1.;
     }
 
     ol = sn = PyUnicode_GET_LENGTH(text);
     if (UNLIKELY(sn == 0)) {
+        *strength_p = 0.;
         return Py_NewRef(text);
     }
 
@@ -1267,6 +1285,7 @@ emoji_impl(PyObject *text, float strength)
 
     n = any_countemotiable(sbuf, sn, kind)*12;
     if (UNLIKELY(n == 0)) {
+        *strength_p = 0.;
         return Py_NewRef(text);
     }
 
@@ -1441,7 +1460,7 @@ emoji(PyObject *Py_UNUSED(_),
         return Py_NewRef(text);
     }
 
-    return emoji_impl(text, strength);
+    return emoji_impl(text, &strength);
 }
 
 PyDoc_STRVAR(emoji__doc__,
@@ -1450,25 +1469,37 @@ PyDoc_STRVAR(emoji__doc__,
     Replaces punctuation/newline/tab characters with emoticons.\n");
 
 LOCAL(PyObject *)
-tildify_impl(PyObject *text, float strength)
+tildify_impl(PyObject *text, float *strength_p)
 {
     Py_ssize_t maxchar, i, count, sn, ol, n;
     int kind, no_lb = 1;
+    float strength = *strength_p;
     char *res;
     const char *sbuf;
     PyObject *u;
 
-    ol = sn = PyUnicode_GET_LENGTH(text);
-    if (UNLIKELY(sn == 0)) {
+    if (UNLIKELY(strength <= 0. || isnan(strength))) {
+        *strength_p = 0.;
         return Py_NewRef(text);
     }
 
+    ol = sn = PyUnicode_GET_LENGTH(text);
     maxchar = PyUnicode_MAX_CHAR_VALUE(text);
     kind = PyUnicode_KIND(text);
     sbuf = PyUnicode_DATA(text);
 
     n = any_countspace(sbuf, sn, kind);
     if (UNLIKELY(n == 0)) {
+        if (rand_double() < strength &&
+            (sn == 0 || any_charisword(sbuf, sn - 1, kind)))
+        {
+            u = PyUnicode_New(sn + 1, maxchar);
+            if (UNLIKELY(!u)) return NULL;
+            res = PyUnicode_DATA(u);
+            memcpy(res, sbuf, kind * sn);
+            any_setchar(res, sn, '~', kind);
+            return u;
+        }
         return Py_NewRef(text);
     }
 
@@ -1506,6 +1537,10 @@ tildify_impl(PyObject *text, float strength)
         memcpy(res, sbuf, kind * sn);
     }
 
+    if (UNLIKELY(count == 0)) {
+        Py_DECREF(u);
+        return Py_NewRef(text);
+    }
     if (count != n) {
         if (UNLIKELY(PyUnicode_Resize(&u, ol + count) < 0)) {
             return NULL;
@@ -1619,7 +1654,7 @@ tildify(PyObject *Py_UNUSED(_),
         return Py_NewRef(text);
     }
 
-    return tildify_impl(text, strength);
+    return tildify_impl(text, &strength);
 }
 
 PyDoc_STRVAR(tildify__doc__,
@@ -1633,7 +1668,7 @@ uwuify(PyObject *Py_UNUSED(_),
        Py_ssize_t nargs,
        PyObject *kwnames)
 {
-    int has_t = 0, has_SS = 0, has_ES = 0, has_TS = 0;
+    int has_t = 0, has_SS = 0, has_ES = 0, has_TS = 0, nochange = 1;
     float SS = 0.2, ES = 0.1, TS = 0.1;
     PyObject *text, *SS_o = NULL, *ES_o = NULL, *TS_o = NULL;
 
@@ -1701,33 +1736,48 @@ uwuify(PyObject *Py_UNUSED(_),
     }
 
     if (has_SS) {
-        if (!PyFloat_CheckExact(SS_o)) {
-        FMT_ERROR_RET(Type,
-                      "'tildify' expected 'float' for 'stutter_strength' "
-                      "argument, got '%.200s'",
-                      Py_TYPE(SS_o)->tp_name);
+        if (PyLong_CheckExact(SS_o)) {
+            SS = _PyLong_Sign(SS_o) > 0 ? 1. : 0.;
         }
-        SS = PyFloat_AS_DOUBLE(SS_o);
+        else if (PyFloat_CheckExact(SS_o)) {
+            SS = PyFloat_AS_DOUBLE(SS_o);
+        }
+        else {
+            FMT_ERROR_RET(Type,
+                          "'tildify' expected 'float' for 'stutter_strength' "
+                          "argument, got '%.200s'",
+                          Py_TYPE(SS_o)->tp_name);
+        }
     }
 
     if (has_ES) {
-        if (!PyFloat_CheckExact(ES_o)) {
+        if (PyLong_CheckExact(ES_o)) {
+            ES = _PyLong_Sign(ES_o) > 0 ? 1. : 0.;
+        }
+        else if (PyFloat_CheckExact(ES_o)) {
+            ES = PyFloat_AS_DOUBLE(ES_o);
+        }
+        else {
             FMT_ERROR_RET(Type,
                           "'tildify' expected 'float' for 'emoji_strength' "
                           "argument, got '%.200s'",
                           Py_TYPE(ES_o)->tp_name);
         }
-        ES = PyFloat_AS_DOUBLE(ES_o);
     }
 
     if (has_TS) {
-        if (!PyFloat_CheckExact(TS_o)) {
+        if (PyLong_CheckExact(TS_o)) {
+            TS = _PyLong_Sign(TS_o) > 0 ? 1. : 0.;
+        }
+        else if (PyFloat_CheckExact(TS_o)) {
+            TS = PyFloat_AS_DOUBLE(TS_o);
+        }
+        else {
             FMT_ERROR_RET(Type,
                           "'tildify' expected 'float' for 'tilde_strength' "
                           "argument, got '%.200s'",
                           Py_TYPE(TS_o)->tp_name);
         }
-        TS = PyFloat_AS_DOUBLE(TS_o);
     }
 
 skip_keyarg_checks:
@@ -1744,7 +1794,10 @@ skip_keyarg_checks:
         Py_DECREF(text); \
         return NULL; \
     } \
-    text = tmp;
+    if (text != tmp) { \
+        nochange = 0; \
+        Py_SETREF(text, tmp); \
+    }
 
     PyObject *tmp = case_lower(text);
     if (UNLIKELY(tmp == NULL)) return NULL;
@@ -1753,9 +1806,28 @@ skip_keyarg_checks:
     DO_FUNC(word_replace_impl, text)
     DO_FUNC(nyaify_impl, text)
     DO_FUNC(char_replace_impl, text)
-    DO_FUNC(stutter_impl, text, SS)
-    DO_FUNC(emoji_impl, text, ES)
-    DO_FUNC(tildify_impl, text, TS)
+    DO_FUNC(stutter_impl, text, &SS)
+    DO_FUNC(emoji_impl, text, &ES)
+    DO_FUNC(tildify_impl, text, &TS)
+    nochange = nochange && (SS || ES || TS);
+    while (nochange &&
+           (SS == 0. || SS < 1.) &&
+           (ES == 0. || ES < 1.) &&
+           (TS == 0. || TS < 1.))
+    {
+        if (SS) {
+            SS += .225;
+            DO_FUNC(stutter_impl, text, &SS)
+        }
+        if (ES) {
+            ES += .075;
+            DO_FUNC(emoji_impl, text, &ES)
+        }
+        if (TS) {
+            TS += .175;
+            DO_FUNC(tildify_impl, text, &TS)
+        }
+    }
 
     return text;
 }
