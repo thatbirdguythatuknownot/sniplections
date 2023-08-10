@@ -910,15 +910,15 @@ PyDoc_STRVAR(nyaify__doc__,
 LOCAL(PyObject *)
 char_replace_impl(PyObject *text)
 {
-    Py_ssize_t pi, i, j, sn, on;
+    Py_ssize_t pi, i, j, sn;
     int kind, no_lb = 1;
     char *res;
     const char *sbuf;
     Py_UCS1 chtmp, ch1 = 'l', ch2 = 'r';
     PyObject *u;
 
-    sn = on = PyUnicode_GET_LENGTH(text);
-    if (UNLIKELY(sn < 3)) {
+    sn = PyUnicode_GET_LENGTH(text);
+    if (UNLIKELY(sn < 1)) {
         return Py_NewRef(text);
     }
 
@@ -961,7 +961,7 @@ redo:
         sn--;
     }
     if ((no_lb || !any_checkchar(sbuf, -1, 'w', kind)) &&
-        !(sn > 0 && any_checkchar(sbuf, 1, 'w', kind)))
+        (sn <= 0 || !any_checkchar(sbuf, 1, 'w', kind)))
     {
         any_setchar(res, 0, 'w', kind);
     }
@@ -975,7 +975,7 @@ redo:
 
 end:
     if (sn > 0) {
-        if (sn == on) {
+        if (no_lb) {
             Py_DECREF(u);
             return Py_NewRef(text);
         }
