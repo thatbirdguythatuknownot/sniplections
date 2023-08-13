@@ -174,7 +174,8 @@ PyDoc_STRVAR(setstate_doc, "Set state information for unpickling.");
 Py_LOCAL_INLINE(Py_ssize_t)
 long_to_ssize(PyObject *o, int *oflow)
 {
-    Py_ssize_t n, n_temp;
+    uint64_t n_temp;
+    Py_ssize_t n;
     const Py_ssize_t long_arg_size = Py_SIZE(o);
 
     if (likely(long_arg_size == 1)) {
@@ -187,15 +188,15 @@ long_to_ssize(PyObject *o, int *oflow)
         const digit *ob_digit = ((PyLongObject *)o)->ob_digit;
         switch (long_arg_size) {
         case 2:
-            n = (size_t)ob_digit[0] | ((size_t)ob_digit[1] << PyLong_SHIFT);
+            n = (uint64_t)ob_digit[0] | ((uint64_t)ob_digit[1] << PyLong_SHIFT);
 #if SIZEOF_SIZE_T == 8
             break;
         case 3:
-            n_temp = ((size_t)ob_digit[0]
-                      | (((size_t)ob_digit[1]
-                          | ((size_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
+            n_temp = ((uint64_t)ob_digit[0]
+                      | (((uint64_t)ob_digit[1]
+                          | ((uint64_t)ob_digit[2] << PyLong_SHIFT)) << PyLong_SHIFT));
 #endif
-            if (unlikely(n_temp > (size_t)PY_SSIZE_T_MAX ||
+            if (unlikely(n_temp > (uint64_t)PY_SSIZE_T_MAX ||
 #if SIZEOF_SIZE_T == 8
                          ob_digit[2] >= 8))
 #else
@@ -204,7 +205,7 @@ long_to_ssize(PyObject *o, int *oflow)
             {
                 goto overflow;
             }
-            n = Py_SAFE_DOWNCAST(n_temp, size_t, Py_ssize_t);
+            n = Py_SAFE_DOWNCAST(n_temp, uint64_t, Py_ssize_t);
             break;
         default:
             goto overflow;
