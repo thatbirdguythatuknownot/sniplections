@@ -344,3 +344,16 @@ from minsolve_linear import solve
 # solve 8x - 2y = 14
 print(solve(14, 8, -2)) # (2, 1)
 ```
+
+**oproperty.py**<br/>
+Original idea from <@!1060338987694293052> (zombiiess). Properties outside of a class. Currently only supports globals. Example:
+```py
+from oproperty import init, oproperty
+
+init()
+
+@oproperty
+def f(): return 5
+
+print(f) # 5
+```
