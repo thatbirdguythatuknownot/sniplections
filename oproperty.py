@@ -24,22 +24,20 @@ def init():
             return B.dict.__delitem__(self, x)
     py_object.from_address(id(globals()) + tuple.__itemsize__).value = balsglo
 
-def oproperty(f=None, fset=None, fdel=None):
+def oproperty(fget=None, fset=None, fdel=None, doc=None):
     import builtins as B
     def wrap(f):
         f.__outsideproperty__ = True
-        f = B.property(f)
-        if B.callable(fset): f.setter(fset)
-        if B.callable(fdel): f.deleter(fdel)
+        f = B.property(f, fset, fdel, doc)
         return f
-    if f is not None:
-        return wrap(f)
+    if fget is not None:
+        return wrap(fget)
     return wrap
 
 class olazyproperty(property):
-    def __init__(self, f):
+    def __init__(self, *args):
         import builtins as B
-        B.property.__init__(self, f)
+        B.property.__init__(self, *args)
     def setter(self, f):
         import builtins as B
         B.property.setter(self, f)
@@ -51,3 +49,7 @@ class olazyproperty(property):
         B.property.deleter(self, f)
     def init(self):
         self.__outsideproperty__ = True
+
+init()
+@oproperty(fset=lambda x:5)
+def f(): return 2
