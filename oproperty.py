@@ -35,21 +35,17 @@ def oproperty(fget=None, fset=None, fdel=None, doc=None):
     return wrap
 
 class olazyproperty(property):
-    def __init__(self, *args):
+    def __init__(self, fget=None, fset=None, fdel=None, doc=None):
         import builtins as B
-        B.property.__init__(self, *args)
-    def setter(self, f):
+        B.property.__init__(self, fget, fset, fdel, doc)
+    def setter(self, f, /):
         import builtins as B
         B.property.setter(self, f)
-    def getter(self, f):
+    def getter(self, f, /):
         import builtins as B
         B.property.getter(self, f)
-    def deleter(self, f):
+    def deleter(self, f, /):
         import builtins as B
         B.property.deleter(self, f)
-    def init(self):
+    def init(self, /):
         self.__outsideproperty__ = True
-
-init()
-@oproperty(fset=lambda x:5)
-def f(): return 2
