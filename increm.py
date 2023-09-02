@@ -8,7 +8,7 @@ PF_LTF.argtypes = py_object,
 PF_LTF.restype = c_int
 set_names = {*hasfree + haslocal + hasname}
 
-globals().update({x: opmap.get(x, -1) for x in ['UNARY_NEGATIVE', 'UNARY_POSITIVE', 'CALL_INTRINSIC_1', *map(opname.__getitem__, set_names)]})
+globals().update({x: opmap.get(x, -1) for x in ['UNARY_NEGATIVE', 'UNARY_POSITIVE', 'CALL_INTRINSIC_1', 'EXTENDED_ARG', *map(opname.__getitem__, set_names)]})
 
 def incdec(self, inc=True):
     frame = _getframe(2)
@@ -21,13 +21,20 @@ def incdec(self, inc=True):
         if inc:
             return orig(int).__pos__(self)
         return orig(int).__neg__(self)
+    arg = code[a - 1]
+    t = a - 4
+    l = 8
+    while t is EXTENDED_ARG:
+        arg += code[t + 1] << l
+        l += 8
+        t -= 2
     if glob := opcode is LOAD_GLOBAL:
-        name = frame.f_code.co_names[code[a - 1] >> 1]
+        name = frame.f_code.co_names[arg >> 1]
     elif opcode is LOAD_NAME:
-        name = frame.f_code.co_names[code[a - 1]]
+        name = frame.f_code.co_names[arg]
         glob = -1
     else:
-        name = (frame.f_code.co_varnames + frame.f_code.co_cellvars + frame.f_code.co_cellvars)[code[a - 1]]
+        name = (frame.f_code.co_varnames + frame.f_code.co_cellvars + frame.f_code.co_cellvars)[arg]
     i = 0
     if inc:
         if CALL_INTRINSIC_1 < 0:
