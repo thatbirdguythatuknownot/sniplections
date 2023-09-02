@@ -357,3 +357,11 @@ def f(): return 5
 
 print(f) # 5
 ```
+
+**increm.py**<br/>
+Original idea from <@!241962659505766402> (programming_enjoyer). Incrementing operator. Works for <3.12 and requires the `einspect` package is installed. Example:
+```py
+import increm
+a = 2
+print(a, ++a, a) # 2 3 3
+```
