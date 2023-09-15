@@ -166,18 +166,24 @@ def gen_punnett(org_1, org_2, traits=None):
             [f"{x}{g_suffix}" for x in crossed_2], dict(genotype_R),
             dict(phenotype_R))
 
-def string_punnett(square, crossed_1=None, crossed_2=None):
+def string_punnett(square, crossed_1=None, crossed_2=None, display_phenotype=False):
     """
     Return the formatted string for the square returned by gen_punnett().
     Optionally put crossed genotype labels as additional arguments:
         crossed_1 (first) - left label
         crossed_2 (second) - top label
+    If display_phenotype is True (or truthy), the phenotype gets displayed
+      along with the genotype in the square.
     """
+    if display_phenotype:
+        func = str
+    else:
+        func = lambda x: x.genotype
     if crossed_1:
         max_left_len = max(map(len, crossed_1))
     else:
         max_left_len = 0
-    col_strs = [[*map(str, col)] for col in zip(*square)]
+    col_strs = [[*map(func, col)] for col in zip(*square)]
     if crossed_2:
         col_max_lens = [2+max(max(map(len, col)), len(gtype))
                         for col, gtype in zip(col_strs, crossed_2)]
@@ -206,7 +212,7 @@ def string_punnett(square, crossed_1=None, crossed_2=None):
     to_join = [header]
     for i, row in enumerate(square):
         if row:
-            row_s = ' | '.join(f'{str(x):<{col_max_lens[i]-2}}'
+            row_s = ' | '.join(f'{func(x):<{col_max_lens[i]-2}}'
                                for i, x in enumerate(row))
             row_s = f"| {row_s} |\n"
         if crossed_1:
@@ -217,13 +223,15 @@ def string_punnett(square, crossed_1=None, crossed_2=None):
             to_join.append(row_s)
     return sep_1 + sep.join(to_join) + sep[:-1]
 
-def string_gen_punnett(values):
+def string_gen_punnett(values, display_phenotype=False):
     """
     Return the formatted string for the tuple containing the 5 values
       returned by gen_punnett().
+    If display_phenotype is True (or truthy), the phenotype gets displayed
+      along with the genotype in the square.
     """
     square, crossed_1, crossed_2, genotype_ratio, phenotype_ratio = values
-    res = string_punnett(square, crossed_1, crossed_2)
+    res = string_punnett(square, crossed_1, crossed_2, display_phenotype)
     if not res:
         res = "++\n++"
     if genotype_ratio or phenotype_ratio:
