@@ -366,3 +366,6 @@ a = 2
 print(a, --a, a, ++a, a) # 2 1 1 2 2
 ```
 Do note that anything past the first two chained `-`/`+` will NOT be interpreted as an increment, so `++++a` will only do the equivalent of `+(+(a := a + 1))` in normal Python.
+
+**game.py**<br/>
+I made this because I was bored and I had no internet. Tried to make a thing where eventually all the values balance out but that... something is wrong with the formulas for now. Enjoy.
