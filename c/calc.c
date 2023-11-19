@@ -97,9 +97,9 @@ number parse_expr(Parser *parser, Prec prec) {
         return -1;
     }
 
-    for (; (c = *parser->pos);) {
+    for (; *parser->pos;) {
         SKIP_WSP(parser)
-        switch (c) {
+        switch ((c = *parser->pos)) {
         case '-':
             RET_IF(prec >= P_BOP1, res)
             ++parser->pos;
@@ -208,7 +208,7 @@ int main() {
         "   power (^)\n"
     );
 
-    while (scanf(" %[^\r\n]%n ", buffer, &length) == 1) {
+    while (scanf(" %4095[^\r\n]%n", buffer, &length) == 1) {
         if (length == 1 && (buffer[0] == 'Q' || buffer[0] == 'q')) {
             break;
         }
