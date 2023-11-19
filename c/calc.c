@@ -1,10 +1,12 @@
 #include <stdio.h>
 #include <math.h>
 #include <string.h>
+#include <stdint.h>
 
 typedef double number;
 
 typedef struct {
+    char paren_stack[200];
     int paren;
     const char *pos;
     int has; /* parser indicator */
@@ -31,8 +33,8 @@ typedef enum {
         } while (IS_WSP(*(parser)->pos)); \
     } \
 
-#define ERR_PROP(res, parser) \
-    if ((res) == -1. && (parser)->has) { \
+#define ERR_PROP(parser) \
+    if ((parser)->has) { \
         return -1.; \
     } \
 
@@ -40,6 +42,12 @@ typedef enum {
     if ((cond)) { \
         return val; \
     } \
+
+#define PFLIP(c) \
+    (c == '[' ? ']' : ')')
+
+#define RPNAME(c) \
+    (c == ']' ? "bracket" : "parenthesis")
 
 number parse_expr(Parser *parser, Prec prec) {
     number res, rhs;
@@ -52,29 +60,31 @@ number parse_expr(Parser *parser, Prec prec) {
     case '-':
         ++parser->pos;
         res = parse_expr(parser, P_UOP);
-        ERR_PROP(res, parser)
+        ERR_PROP(parser)
         res = -res;
         break;
     case '+':
         ++parser->pos;
         res = parse_expr(parser, P_UOP);
-        ERR_PROP(res, parser)
+        ERR_PROP(parser)
         res = +res;
         break;
     case '(':
-        ++parser->pos;
-        parser->paren++;
+    case '[':
+        c = *parser->pos++;
+        parser->paren_stack[parser->paren++] = c;
+        c = PFLIP(c);
         res = parse_expr(parser, P_EXPR);
-        ERR_PROP(res, parser)
-        if (*parser->pos == ')') {
+        ERR_PROP(parser)
+        if (*parser->pos == c) {
             ++parser->pos;
             if (--parser->paren < 0) {
-                fputs("WARNING: non-matching closing parenthesis\n", stderr);
+                fprintf(stderr, "WARNING: non-matching closing %s\n", RPNAME(c));
                 parser->paren = 0;
             }
         }
         else {
-            fputs("WARNING: unclosed parenthesis\n", stderr);
+            fprintf(stderr, "WARNING: unclosed %s\n", RPNAME(c));
         }
         break;
     default:
@@ -87,72 +97,79 @@ number parse_expr(Parser *parser, Prec prec) {
         return -1;
     }
 
-    for (; *parser->pos;) {
+    for (; (c = *parser->pos);) {
         SKIP_WSP(parser)
-        switch (*parser->pos) {
+        switch (c) {
         case '-':
             RET_IF(prec >= P_BOP1, res)
             ++parser->pos;
             rhs = parse_expr(parser, P_BOP1);
-            ERR_PROP(rhs, parser)
+            ERR_PROP(parser)
             res -= rhs;
             break;
         case '+':
             RET_IF(prec >= P_BOP1, res)
             ++parser->pos;
             rhs = parse_expr(parser, P_BOP1);
-            ERR_PROP(rhs, parser)
+            ERR_PROP(parser)
             res += rhs;
             break;
         case '*':
             RET_IF(prec >= P_BOP2, res)
             ++parser->pos;
             rhs = parse_expr(parser, P_BOP2);
-            ERR_PROP(rhs, parser)
+            ERR_PROP(parser)
             res *= rhs;
             break;
         case '/':
             RET_IF(prec >= P_BOP2, res)
             ++parser->pos;
             rhs = parse_expr(parser, P_BOP2);
-            ERR_PROP(rhs, parser)
+            ERR_PROP(parser)
             res /= rhs;
             break;
         case '%':
             RET_IF(prec >= P_BOP2, res)
             ++parser->pos;
             rhs = parse_expr(parser, P_BOP2);
-            ERR_PROP(rhs, parser)
+            ERR_PROP(parser)
             res = fmod(res, rhs);
             break;
         case '^':
             RET_IF(prec > P_BOP3, res)
             ++parser->pos;
             rhs = parse_expr(parser, P_UOP);
-            ERR_PROP(rhs, parser)
+            ERR_PROP(parser)
             res = pow(res, rhs);
             break;
         case ')':
-            RET_IF(parser->paren > 0 || prec != P_EXPR, res)
-            parser->paren = 0;
-            fputs("WARNING: non-matching closing parenthesis\n", stderr);
+        case ']':
+            RET_IF(parser->paren > 0 &&
+                       PFLIP(parser->paren_stack[parser->paren - 1]) == c ||
+                   prec != P_EXPR, res)
+            if (parser->paren <= 0) {
+                parser->paren = 0;
+            }
+            fprintf(stderr, "WARNING: unopened closing %s\n", RPNAME(c));
             ++parser->pos;
             break;
         case '(':
+        case '[':
             RET_IF(prec >= P_JUXT, res)
             ++parser->pos;
-            parser->paren++;
+            parser->paren_stack[parser->paren++] = c;
+            c = PFLIP(c);
             rhs = parse_expr(parser, P_EXPR);
-            ERR_PROP(rhs, parser)
-            if (*parser->pos == ')') {
+            ERR_PROP(parser)
+            if (*parser->pos == c) {
                 ++parser->pos;
                 if (--parser->paren < 0) {
-                    fputs("WARNING: non-matching closing parenthesis\n", stderr);
+                    fprintf(stderr, "WARNING: non-matching closing %s\n", RPNAME(c));
                     parser->paren = 0;
                 }
             }
             else {
-                fputs("WARNING: unclosed parenthesis\n", stderr);
+                fprintf(stderr, "WARNING: unclosed %s\n", RPNAME(c));
             }
             res *= rhs;
             break;
@@ -161,7 +178,7 @@ number parse_expr(Parser *parser, Prec prec) {
         default:
             RET_IF(prec >= P_JUXT, res)
             rhs = parse_expr(parser, P_JUXT);
-            ERR_PROP(rhs, parser)
+            ERR_PROP(parser)
             res *= rhs;
             break;
         }
@@ -174,7 +191,9 @@ int main() {
     char buffer[4096] = {0};
     const char *begin = &buffer[0];
     int length;
-    Parser parser = {0, begin, 0};
+    Parser parser = { .paren = 0,
+                      .pos = begin,
+                      .has = 0 };
 
     puts(
         "Calculator (type 'Q' or 'q' to quit)\n"
@@ -189,13 +208,13 @@ int main() {
         "   power (^)\n"
     );
 
-    while (scanf("%4095[^\n]%n ", buffer, &length) == 1) {
+    while (scanf(" %[^\r\n]%n ", buffer, &length) == 1) {
         if (length == 1 && (buffer[0] == 'Q' || buffer[0] == 'q')) {
             break;
         }
         number res = parse_expr(&parser, P_EXPR);
-        if (res == -1. && parser.has) {
-            fprintf(stderr, " (position %ld)\n", parser.pos - begin);
+        if (parser.has) {
+            fprintf(stderr, " (position %lld)\n", parser.pos - begin);
             parser.has = 0;
             goto cleanup;
         }
