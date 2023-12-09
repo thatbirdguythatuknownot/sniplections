@@ -26,6 +26,6 @@ def get_min_digits(x, digs="0123456789", n=None):
         b = [digs[x] for x in b_digs]
         a_intval = sum(base**x * a_digs[~x] for x in R_l_check_d2_m1_TO_0)
         b_intval = sum(base**x * b_digs[~x] for x in R_l_check_d2_m1_TO_0)
-        if (diff := b_intval - a_intval) < md:
+        if (diff := abs(b_intval - a_intval)) < md:
             md, ma, mb = diff, a, b
     return md, mb, ma
