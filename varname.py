@@ -52,13 +52,15 @@ def _varname(code, i, instrs=None, valid_jumps=None, find_idx=False):
             raise IndexError(f"cannot find index {i} in code sequence")
     if valid_jumps is None:
         valid_jumps = set()
+        invalid = set()
         for j in range(i):
             instr = instrs[j]
-            if instr.opcode == JUMP_FORWARD:
+            if instr.opcode == JUMP_FORWARD and instr.argval not in invalid:
                 valid_jumps.add(instr.argval)
             elif instr.opcode in hasj:
                 if instr.argval in valid_jumps:
                     valid_jumps.remove(instr.argval)
+                    invalid.add(instr.argval)
     qname_list = deque()
     add = qname_list.appendleft
     addmany = qname_list.extendleft
