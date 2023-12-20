@@ -13,13 +13,14 @@ globals().update({
         "LOAD_NAME LOAD_FAST LOAD_DEREF LOAD_CLASSDEREF LOAD_GLOBAL "
         "LOAD_ATTR CALL PRECALL EXTENDED_ARG KW_NAMES "
         "LOAD_FROM_DICT_OR_GLOBALS LOAD_FAST_CHECK LOAD_FAST_AND_CLEAR "
-        "LOAD_FROM_DICT_OR_DEREF LOAD_SUPER_ATTR CACHE JUMP_FORWARD"
+        "LOAD_FROM_DICT_OR_DEREF LOAD_SUPER_ATTR CACHE JUMP_FORWARD "
+        "LOAD_CONST LOAD_METHOD"
         .split()
 })
-if version_info == (3, 11):
-    PRECALL_HEADER = 1 + _ICE[PRECALL]
-else:
+if NOT_311 := not (3,11) <= version_info < (3, 12):
     PRECALL_HEADER = 0
+else:
+    PRECALL_HEADER = 1 + _ICE[PRECALL]
 
 ARG_OFFSET = (PRECALL_HEADER + 1 + _ICE[CALL]) * 2
 FASTLOCAL_INSTRS = {
@@ -39,7 +40,11 @@ def skip_header(instrs, i):
             i -= 2
     return i
 
-def _varname(code, i, instrs=None, valid_jumps=None, find_idx=False):
+def _varname(
+    code, i, instrs=None, valid_jumps=None,
+    find_idx=False, allow_const=False,
+    reverse_append=False
+):
     if instrs is None:
         instrs = [*get_instructions(code)]
     if find_idx:
@@ -62,8 +67,12 @@ def _varname(code, i, instrs=None, valid_jumps=None, find_idx=False):
                     valid_jumps.remove(instr.argval)
                     invalid.add(instr.argval)
     qname_list = deque()
-    add = qname_list.appendleft
-    addmany = qname_list.extendleft
+    if reverse_append:
+        add = qname_list.append
+        addmany = qname_list.extend
+    else:
+        add = qname_list.appendleft
+        addmany = qname_list.extendleft
     orig_i = i
     while i >= 0:
         instr = instrs[i]
@@ -98,8 +107,8 @@ def _varname(code, i, instrs=None, valid_jumps=None, find_idx=False):
             # free var
             add(code.co_freevars[oparg])
             break
-        elif opcode == LOAD_ATTR:
-            add(code.co_names[oparg >> 1])
+        elif opcode == LOAD_ATTR or opcode == LOAD_METHOD:
+            add(code.co_names[oparg >> NOT_311])
             add('.')
         elif opcode == LOAD_SUPER_ATTR:
             # attr
@@ -107,12 +116,16 @@ def _varname(code, i, instrs=None, valid_jumps=None, find_idx=False):
             add(").")
             if oparg & 2:
                 # second super() arg
-                name1, i = _varname(code, i, instrs)
+                name1, i = _varname(code, i, instrs,
+                                    valid_jumps, allow_const=True,
+                                    reverse_append=True)
                 if not name1:
                     name0 = name1 = ("...",)
                 else:
                     # first super() arg
-                    name0, i = _varname(code, i, instrs)
+                    name0, i = _varname(code, i, instrs,
+                                        valid_jumps, allow_const=True,
+                                        reverse_append=True)
                     if not name0:
                        name0 = ("...",)
                 # add in reverse order
@@ -120,6 +133,60 @@ def _varname(code, i, instrs=None, valid_jumps=None, find_idx=False):
                 add(", ")
                 addmany(name0)
             add("super(")
+            break
+        elif opcode == CALL:
+            narg = oparg
+            instr = instrs[i]
+            opcode = instr.opcode
+            if opcode == PRECALL:
+                i -= 1
+                assert i >= 0
+                instr = instrs[i]
+                opcode = instr.opcode
+            if opcode == KW_NAMES:
+                kw = code.co_consts[instr.arg]
+                nkw = len(kw)
+            else:
+                nkw = 0
+                kw = ()
+            still_simple = True
+            add(')')
+            add_comma = False
+            for n in range(narg):
+                if still_simple:
+                    valname, i = _varname(code, i, instrs,
+                                          valid_jumps, allow_const=True,
+                                          reverse_append=True)
+                    if not valname:
+                        still_simple = False
+                        valname = ("...",)
+                else:
+                    valname = ("...",)
+                if add_comma:
+                    add(", ")
+                else:
+                    add_comma = True
+                addmany(valname)
+                if n < nkw:
+                    add('=')
+                    add(kw[~n])
+            add('(')
+            if still_simple:
+                funcname, i = _varname(code, i, instrs,
+                                       valid_jumps, allow_const=True,
+                                       reverse_append=True)
+                if not funcname:
+                    still_simple = False
+                    funcname = ("...",)
+            else:
+                funcname = ("...",)
+            addmany(funcname)
+            break
+        elif opcode == LOAD_CONST and allow_const:
+            if (isinstance(instr.argval, int)
+                    and qname_list and qname_list[0] == '.'):
+                add(' ')
+            add(instr.argrepr)
             break
     return qname_list, i
 
