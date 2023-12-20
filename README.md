@@ -369,3 +369,14 @@ Do note that anything past the first two chained `-`/`+` will NOT be interpreted
 
 **game.py**<br/>
 I made this because I was bored and I had no internet. Tried to make a thing where eventually all the values balance out but that... something is wrong with the formulas for now. Enjoy.
+
+**varname.py**<br/>
+Original idea from <@!88336074710982656> (L3viathan). Get a variable's (qualified) name. Works on 3.11+. Example:
+```py
+from varname import varname
+
+class A:
+    a = 5
+
+print(varname(A.a), varname(A)) # A.a A
+```
