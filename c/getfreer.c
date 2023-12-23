@@ -1,0 +1,54 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <conio.h>
+
+/* https://github.com/thatbirdguythatuknownot/sha512 */
+#include "sha512/SHA512.c.h"
+
+#define HASH_ARR_LEN 8
+
+static uint64_t MSG_HASH[HASH_ARR_LEN] = {
+    0xd4097629e8b143ab,
+    0xb80050e46ae4fb27,
+    0xaaf3aaa728cc9119,
+    0xae6f0805efaa0299,
+    0x174ca2e5beb4028a,
+    0x13240ef153c35634,
+    0x72c49e241ab17f4c,
+    0x0211a4629774db32,
+};
+
+#define MSG_LENGTH 12
+
+int main() {
+    unsigned char buffer[MSG_LENGTH];
+    size_t i;
+    int ch;
+redo:
+    printf("> ");
+    for (i = 0; (ch = _getch()) != '\n' && ch != '\r'; i++) {
+        if (i < MSG_LENGTH) {
+            buffer[i] = (unsigned char)ch;
+        }
+        printf("_");
+        if (ch == 0x03 || ch == 0x1a) { /* Ctrl+C or Ctrl+Z */
+            puts("\nQuitting...");
+            return 1;
+        }
+    }
+    if (i != MSG_LENGTH) {
+        puts("\nInvalid password!");
+        goto redo;
+    }
+
+    uint64_t *digest = SHA512Hash(buffer, MSG_LENGTH);
+    for (size_t i = 0; i < HASH_ARR_LEN; i++) {
+        if (digest[i] != MSG_HASH[i]) {
+            puts("\nInvalid password!");
+            goto redo;
+        }
+    }
+
+    return 0;
+}
