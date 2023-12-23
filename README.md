@@ -380,3 +380,6 @@ class A:
 
 print(varname(A.a), varname(A)) # A.a A
 ```
+
+**msgtohash.py**<br/>
+Utility function for autogenerating code in `/c/getfreer.c`.
