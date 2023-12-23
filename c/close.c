@@ -19,7 +19,7 @@ static inline const HWND get_roblox_frontwindow(void)
     return NULL;
 }
 
-#define GETFREER_DIR "C:\\Users\\JerielPC"
+#define GETFREER_DIR ""
 
 int main(int argc, char **argv)
 {
