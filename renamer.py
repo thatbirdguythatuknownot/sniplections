@@ -101,8 +101,8 @@ class Renamer(ast.NodeTransformer):
             node = self.new_from(node, attr=name)
         return self.generic_visit(node)
 
-def rename(source, renamer=Renamer):
+def rename(source, renamer=Renamer, *args, **kwargs):
     tree = ast.parse(source)
-    transformed = renamer().visit(tree)
+    transformed = renamer(*args, **kwargs).visit(tree)
     ast.fix_missing_locations(transformed)
     return ast.unparse(transformed)
