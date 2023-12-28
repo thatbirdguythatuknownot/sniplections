@@ -383,3 +383,13 @@ print(varname(A.a), varname(A)) # A.a A
 
 **msgtohash.py**<br/>
 Utility function for autogenerating code in `/c/getfreer.c`.
+
+**renamer.py**<br/>
+Renamer class and function. Works like so:
+```py
+from renamer import rename
+
+src = "_ = 5"
+print(rename(src)) # A = 5
+```
+More descriptive examples might be provided in the future.
