@@ -393,3 +393,6 @@ src = "_ = 5"
 print(rename(src)) # A = 5
 ```
 More descriptive examples might be provided in the future.
+
+**dundeobfuscator.py**<br/>
+Dunder obfuscation deobfuscator class utilizing `renamer.Renamer`.
