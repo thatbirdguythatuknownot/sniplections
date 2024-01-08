@@ -1,8 +1,8 @@
 import math
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, getcontext
 from fractions import Fraction
-from math import atan2, degrees, isnan
+from math import atan2, degrees, isnan, radians
 from scinum import SciNum, scinum
 
 def sqrt(x):
@@ -99,13 +99,15 @@ class Vector:
             )
         if is_magdir:
             self.magnitude = scinum(x, n_SF, orig=x)
+            n_SF = self.magnitude.n_SF
             self.direc = scinum(y, n_SF, orig=y)
-            theta = self.direc.num
+            theta = radians(self.direc.num)
             self.x = scinum(t := self.magnitude*math.cos(theta), n_SF, orig=t)
             self.y = scinum(t := self.magnitude*math.sin(theta), n_SF, orig=t)
         else:
             self.x = scinum(x, n_SF, orig=x)
             self.y = scinum(y, n_SF, orig=y)
+            n_SF = min(self.x.n_SF, self.y.n_SF)
             self.magnitude = SciNum(sqrt(self.x.num**2 + self.y.num**2),
                                     min(self.x.n_SF, self.y.n_SF))
             self.direc = Degrees(degrees(atan2(y, x)), n_SF)
