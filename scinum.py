@@ -96,7 +96,7 @@ def coerce(x, y):
 class SciNum(numbers.Real):
     def __init__(self, num, n_SF=math.inf):
         if isinstance(num, SciNum):
-            if isinf(n_SF):
+            if isinf(n_SF) or n_SF < 0:
                 n_SF = num.n_SF
             num = num.num
         if isinstance(num, str):
@@ -109,7 +109,8 @@ class SciNum(numbers.Real):
             n_SF = get_n_SF(num)
         if not isinf(n_SF):
             sf_round = n_SF_round(num, n_SF)
-            getcontext().prec = max(sf_round, n_SF)
+            if (to_set := max(sf_round, n_SF)) and to_set > 0:
+                getcontext().prec = max(getcontext().prec, to_set)
             num = round(num, sf_round)
         self.num = num
         self.n_SF = n_SF
@@ -120,7 +121,8 @@ class SciNum(numbers.Real):
                 n_SFdec(B, other.n_SF if isinstance(other, SciNum) else math.inf))
         t = self.num + B
         if not isinf(n):
-            getcontext().prec = n
+            if n and n > 0:
+                getcontext().prec = max(getcontext().prec, n)
             t = round(t, n)
         return type(self)(t, n + nint_places(t))
     __radd__ = __add__
