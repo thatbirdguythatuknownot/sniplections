@@ -2,7 +2,7 @@ import math
 from dataclasses import dataclass
 from decimal import Decimal, getcontext
 from fractions import Fraction
-from math import atan2, degrees, isnan, radians
+from math import atan, degrees, isnan, radians
 from scinum import SciNum, scinum
 
 def sqrt(x):
@@ -99,8 +99,8 @@ class Vector:
             )
         if is_magdir:
             self.magnitude = scinum(x, n_SF, orig=x)
-            n_SF = self.magnitude.n_SF
             self.direc = scinum(y, n_SF, orig=y)
+            n_SF = self.magnitude.n_SF
             theta = radians(self.direc.num)
             self.x = scinum(t := self.magnitude*math.cos(theta), n_SF, orig=t)
             self.y = scinum(t := self.magnitude*math.sin(theta), n_SF, orig=t)
@@ -108,9 +108,14 @@ class Vector:
             self.x = scinum(x, n_SF, orig=x)
             self.y = scinum(y, n_SF, orig=y)
             n_SF = min(self.x.n_SF, self.y.n_SF)
-            self.magnitude = SciNum(sqrt(self.x.num**2 + self.y.num**2),
-                                    min(self.x.n_SF, self.y.n_SF))
-            self.direc = Degrees(degrees(atan2(y, x)), n_SF)
+            x = self.x.num
+            y = self.y.num
+            self.magnitude = SciNum(sqrt(x*x + y*y), n_SF)
+            self.direc = Degrees(degrees(atan(y/x)), n_SF)
+            if x < 0:
+                self.direc += 180
+            elif y < 0:
+                self.direc += 360
         self.n_SF = n_SF
     def __add__(self, other):
         x = self.x + other.x
@@ -159,3 +164,10 @@ if __name__ == "__main__":
     v = Vector(6, 2)
     print(u.dot(v))
     print(Vector(5, direc=0))
+    a = Vector(35, direc=25, n_SF=-1)
+    b = Vector(15, direc=90 - 10, n_SF=-1)
+    c = Vector(SciNum(20, n_SF=2), direc=360 - 43, n_SF=-1)
+    d = Vector(SciNum(40, n_SF=2), direc=180 + 28, n_SF=-1)
+    print(a+b)
+    print(a+c)
+    print(c+d)
