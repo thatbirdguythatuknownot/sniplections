@@ -1,6 +1,6 @@
 import math
 import numbers
-from decimal import Decimal, getcontext
+from decimal import Decimal, ROUND_HALF_UP, getcontext
 from fractions import Fraction
 from math import ceil, floor, log10 as m_log10, isinf, isnan, trunc
 
