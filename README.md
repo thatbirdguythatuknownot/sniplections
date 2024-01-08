@@ -396,3 +396,13 @@ More descriptive examples might be provided in the future.
 
 **dundeobfuscator.py**<br/>
 Dunder obfuscation deobfuscator class utilizing `renamer.Renamer`.
+
+**scinum.py**, **vectors.py**<br/>
+Quality-of-life classes to help with my Physics classes. May be slow. Example:
+```py
+from vectors import Vector
+a = Vector(35, direc=25, n_SF=-1)      # 35N, 25° N of E
+b = Vector(15, direc=90 - 10, n_SF=-1) # 15N, 10° E of N
+# prints in the format of (x, y) | magnitude -> direction (in degrees)
+print(a + b) # (35, 30) | 46 -> 41°
+```
