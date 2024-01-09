@@ -409,8 +409,8 @@ Output:
 Quality-of-life classes to help with my Physics classes. May be slow. Example:
 ```py
 from vectors import Vector
-a = Vector(35, direc=25, n_SF=-1)      # 35N, 25° N of E
-b = Vector(15, direc=90 - 10, n_SF=-1) # 15N, 10° E of N
+a = Vector(35, direc="25 N of E", n_SF=-1)
+b = Vector(15, direc="10 E of N", n_SF=-1)
 # prints in the format of (x, y) | magnitude -> direction (in degrees)
 print(a + b) # (35, 30) | 46 -> 41°
 ```
