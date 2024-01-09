@@ -32,10 +32,12 @@ class Renamer(ast.NodeTransformer):
             self.verifier = verifier
         if generator is not None:
             self.generator = generator
+        else:
+            self.generator = namegen_from_param(
+                verifier = lambda name, self, _:
+                    name.isidentifier() and name not in self.taken
+            )
     verifier = lambda _, name: all(map('_'.__eq__, name))
-    generator = namegen_from_param(
-        verifier = lambda name, self, _: name.isidentifier() and name not in self.taken
-    )
     def get_name(self, name):
         if name in self.name_map:
             return self.name_map[name]
