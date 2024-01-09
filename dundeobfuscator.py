@@ -48,7 +48,7 @@ class Evaluator(renamer.Renamer):
     def add_name_nodes(self, name, *args, override=False):
         if not override and name in self.name_to_node:
             self.name_to_node[name] += args
-            continue
+            return
         self.name_to_node[name] = [*args]
     def maybe_change(*args, **kwargs):
         self = args[0]
@@ -184,16 +184,16 @@ class Evaluator(renamer.Renamer):
             res = ast.copy_location(node.body if valtest else node.orelse, node)
             res = self.visit(res)
         else:
-            with self.freeze_defs() as (body_defs, body_nn):
+            with self.freeze_defs() as body_defs: #, body_nn):
                 body = self.visit(node.body)
-            with self.freeze_defs() as (orelse_defs, orelse_nn):
+            with self.freeze_defs() as orelse_defs: #, orelse_nn):
                 orelse = self.visit(node.orelse)
             if body_defs or orelse_defs:
                 for name, value in body_defs.items():
                     if name in orelse_defs:
                         if orelse_defs.pop(name) == value:
                             self.set_definition(name, value)
-                            self.add_name_nodes(name, body_nn[name], orelse_nn[name])
+                            # self.add_name_nodes(name, body_nn[name], orelse_nn[name])
                             continue
                     self.set_definition(name, VOID_VALUE)
                 for name in orelse_defs:
