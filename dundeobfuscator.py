@@ -1,27 +1,34 @@
 import ast
 import contextlib
+import re
 import renamer
 import sys
 import traceback
 
 NO_VALUE = object()
+VOID_VALUE = object()
 MAX_REPR_THRESHOLD = 100
 
+valid_dunder = re.compile(r"__(?!_)\w+(?<!_)__").fullmatch
+
 class Evaluator(renamer.Renamer):
-    marked_nosub = {
-        "__builtins__", ".__getattribute__",
-    }
+    marked_nosub = set()
     def __init__(self, partial_only=False, frame=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.unparse_map = {}
         self.unparse_node_map = {}
+        self.name_to_node = {}
         self.definitions = {}
         frame = sys._getframe(1) if frame is None else frame
         for name in "__name__", "__builtins__":
             if name in frame.f_globals:
-                self.definitions[name] = frame.f_globals[name]
+                self.set_definition(name, frame.f_globals[name])
         if not partial_only:
             self.get_name = super().get_name
+    def get_definition(self, name, default=NO_VALUE):
+        return self.definitions.get(name, default)
+    def set_definition(self, name, value):
+        self.definitions[name] = value
     def get_name(self, name):
         if name in self.name_map:
             return self.name_map[name]
@@ -29,14 +36,20 @@ class Evaluator(renamer.Renamer):
             return None
         return name
     def get_repr(self, val):
-        return ast.dump(val) if isinstance(val, ast.AST) else repr(val)
+        return ast.unparse(val) if isinstance(val, ast.AST) else repr(val)
     def get_noded(self, node):
-        return self.unparse_node_map.get(self.get_repr(node))
+        if isinstance(node, ast.Name):
+            return None
+        return self.unparse_node_map.get(ast.dump(node))
     def set_noded(self, old_node, new_node):
-        node_repr = self.get_repr(old_node)
-        self.unparse_node_map[node_repr] = new_node
-        self.unparse_map[node_repr] = self.get_repr(new_node)
+        self.unparse_node_map[ast.dump(old_node)] = new_node
+        self.unparse_map[self.get_repr(old_node)] = self.get_repr(new_node)
         return new_node
+    def add_name_nodes(self, name, *args, override=False):
+        if not override and name in self.name_to_node:
+            self.name_to_node[name] += args
+            continue
+        self.name_to_node[name] = [*args]
     def maybe_change(*args, **kwargs):
         self = args[0]
         node = args[1]
@@ -49,6 +62,29 @@ class Evaluator(renamer.Renamer):
         for field in to_delete:
             del kwargs[field]
         return self.set_noded(node, self.new_from(node, kwargs) if kwargs else node)
+    def _handle_eval(self, node):
+        node_repr = self.get_repr(node)
+        if node_repr not in self.marked_nosub:
+            if (
+                (val := self.safe_eval(node)) is not NO_VALUE
+                and val is not VOID_VALUE
+            ):
+                val_repr = repr(val)
+                if len(val_repr) <= MAX_REPR_THRESHOLD:
+                    with self.wrap_try(catch=SyntaxError, print_exc=False):
+                        compile(val_repr, "<test>", "exec")
+                        self.unparse_map[node_repr] = val_repr
+                        node_dump = ast.dump(node)
+                        node = ast.copy_location(ast.Constant(value=val), node)
+                        self.unparse_node_map[node_dump] = node
+                        return node
+                self.marked_nosub.add(node_repr)
+        return None
+    def handle_eval(self, node):
+        res = self._handle_eval(node)
+        if res is None:
+            res = self.set_noded(node, self.generic_visit(node))
+        return res
     @contextlib.contextmanager
     def wrap_try(_, catch=BaseException, print_exc=True):
         try:
@@ -56,26 +92,22 @@ class Evaluator(renamer.Renamer):
         except catch:
             if print_exc:
                 traceback.print_exc()
-    def _handle_eval(self, node):
-        node_repr = self.get_repr(node)
-        if node_repr not in self.marked_nosub:
-            if (val := self.safe_eval(node)) is not NO_VALUE:
-                val_repr = repr(val)
-                if len(val_repr) <= MAX_REPR_THRESHOLD:
-                    with self.wrap_try(catch=SyntaxError, print_exc=False):
-                        compile(val_repr, "<test>", "exec")
-                        self.unparse_map[node_repr] = val_repr
-                        node = ast.copy_location(ast.Constant(value=val), node)
-                        self.unparse_node_map[node_repr] = node
-                        return node
-                else:
-                    self.marked_nosub.add(node_repr)
-        return None
-    def handle_eval(self, node):
-        res = self._handle_eval(node)
-        if res is None:
-            res = self.set_noded(node, self.generic_visit(node))
-        return res
+    @contextlib.contextmanager
+    def freeze_defs(self):
+        definitions = {}
+        old_get = self.get_definition
+        old_set = self.set_definition
+        def new_get(name, default=NO_VALUE):
+            if (val := definitions.get(name, NO_VALUE)) is not NO_VALUE:
+                return val
+            return old_get(name, default)
+        def new_set(name, value):
+            definitions[name] = value
+        self.get_definition = new_get
+        self.set_definition = new_set
+        yield definitions
+        self.get_definition = old_get
+        self.set_definition = old_set
     def visit(self, node):
         if unparsed := self.get_noded(node):
             return unparsed
@@ -90,18 +122,7 @@ class Evaluator(renamer.Renamer):
     def visit_Name(self, node):
         name = node.id
         if isinstance(node.ctx, ast.Load):
-            self.unparse_map[name] = name
-            if name in self.definitions and name not in self.marked_nosub:
-                val = self.definitions[name]
-                val_repr = self.get_repr(val)
-                with self.wrap_try(catch=SyntaxError, print_exc=False):
-                    compile(val_repr, "<test>", "exec")
-                    self.unparse_map[name] = val_repr
-                    node = ast.copy_location(
-                        val if isinstance(val, ast.AST) else ast.Constant(value=val),
-                        node
-                    )
-            self.unparse_node_map[name] = node
+            node = self.handle_eval(node)
         else:
             old_node = node
             if isinstance(node.ctx, ast.Store):
@@ -112,8 +133,21 @@ class Evaluator(renamer.Renamer):
         return self.generic_visit(node)
     def visit_NamedExpr(self, node):
         targ = self.visit(node.target)
-        self.definitions[targ.id] = val = self.visit(node.value)
-        return self.maybe_change(node, target=targ, value=val)
+        val = self.visit(node.value)
+        set_name = False
+        if (
+            (eval_val := self.safe_eval(val)) is not NO_VALUE
+            and eval_val is not VOID_VALUE
+        ):
+            set_name = True
+            self.set_definition(targ.id, eval_val)
+            val = ast.copy_location(ast.Constant(value=eval_val), node)
+        else:
+            self.set_definition(targ.id, VOID_VALUE)
+        node = self.maybe_change(node, target=targ, value=val)
+        if set_name:
+            self.add_name_nodes(targ.id, node, override=True)
+        return node
     def visit_Call(self, node):
         res = self._handle_eval(node)
         if res is not None:
@@ -144,6 +178,28 @@ class Evaluator(renamer.Renamer):
                 res = self.visit(res)
         return self.set_noded(node, self.generic_visit(res))
     visit_BinOp = visit_UnaryOp = handle_eval
+    def visit_IfExp(self, node):
+        test = self.visit(node.test)
+        if (valtest := self.safe_eval(test)) is not NO_VALUE:
+            res = ast.copy_location(node.body if valtest else node.orelse, node)
+            res = self.visit(res)
+        else:
+            with self.freeze_defs() as (body_defs, body_nn):
+                body = self.visit(node.body)
+            with self.freeze_defs() as (orelse_defs, orelse_nn):
+                orelse = self.visit(node.orelse)
+            if body_defs or orelse_defs:
+                for name, value in body_defs.items():
+                    if name in orelse_defs:
+                        if orelse_defs.pop(name) == value:
+                            self.set_definition(name, value)
+                            self.add_name_nodes(name, body_nn[name], orelse_nn[name])
+                            continue
+                    self.set_definition(name, VOID_VALUE)
+                for name in orelse_defs:
+                    self.set_definition(name, VOID_VALUE)
+            res = node
+        return self.set_noded(node, self.generic_visit(res))
     def safe_eval(self, node):
         return getattr(self, "safe_eval_" + node.__class__.__name__,
                        self.generic_safe_eval)(node)
@@ -157,8 +213,10 @@ class Evaluator(renamer.Renamer):
         return res
     def safe_eval_Name(self, node):
         assert isinstance(node.ctx, ast.Load)
-        if node.id in self.definitions:
-            val = self.definitions[node.id]
+        if (
+            (val := self.get_definition(node.id)) is not NO_VALUE
+            and val is not VOID_VALUE
+        ):
             return self.safe_eval(val) if isinstance(val, ast.AST) else val
         return NO_VALUE
     def safe_eval_Constant(self, node):
@@ -189,6 +247,11 @@ class Evaluator(renamer.Renamer):
             return val[item]
         return NO_VALUE
     def safe_eval_Call(self, node):
+        if (
+            not isinstance(node.func, ast.Attribute) or
+            not valid_dunder(node.func.attr)
+        ):
+            return NO_VALUE
         if (func := self.safe_eval(node.func)) is NO_VALUE:
             return NO_VALUE
         if not node.keywords and len(node.args) < 3:
