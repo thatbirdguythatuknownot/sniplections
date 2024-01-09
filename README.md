@@ -395,7 +395,15 @@ print(rename(src)) # A = 5
 More descriptive examples might be provided in the future.
 
 **dundeobfuscator.py**<br/>
-Dunder obfuscation deobfuscator class utilizing `renamer.Renamer`.
+Dunder obfuscation deobfuscator class utilizing `renamer.Renamer`. Example:
+```py
+from dundeobfuscator import deobfuscate
+print(deobfuscate("(__ := 'a').__getattribute__('join')((__builtins__.chr(__builtins__.ord(__)+1),)*5)"))
+```
+Output:
+```
+(A := 'a').join((__builtins__.chr(__builtins__.ord('a') + 1),) * 5)
+```
 
 **scinum.py**, **vectors.py**<br/>
 Quality-of-life classes to help with my Physics classes. May be slow. Example:
