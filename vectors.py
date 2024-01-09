@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from decimal import Decimal, getcontext
 from fractions import Fraction
 from math import atan, degrees, isnan, radians
+from re import compile as pcompile
 from scinum import SciNum, scinum
 
 def sqrt(x):
@@ -15,12 +16,47 @@ def sqrt(x):
     res = res if res % 1 else int(res)
     return type(x)(res, x.n_SF) if isinstance(x, SciNum) else res
 
+direc_p = pcompile(r"\s*(?:(-?(?:\d+(?:\.\d*)?|\.\d+))°?\s*)?(N(?:orth)?|S(?:outh)?|E(?:ast)?|W(?:est)?)\s*(\b[Oo][Ff]\s+)?(N(?:orth)?|S(?:outh)?|E(?:ast)?|W(?:est)?)?\s*").fullmatch
+
+DIR_QUAD = "ENWS"
+
+DIRFULL_QUAD = "East", "North", "West", "South"
+
+def get_quad(dir_name):
+    if (quad := DIR_QUAD.find(dir_name)) >= 0:
+        return quad
+    return DIRFULL_QUAD.index(dir_name)
+
+def get_deg(dir_name):
+    return 90 * get_quad(dir_name)
+
+def try_parse_direc(x):
+    assert isinstance(x, str)
+    if m := direc_p(x):
+        match m.groups():
+            case [None, a, None, b]:
+                if b is not None:
+                    return (get_deg(a) + get_deg(b)) >> 1
+                return get_deg(a)
+            case [d, a, _, b] if d is not None is not b:
+                p = get_quad(a)
+                q = get_quad(b)
+                d = Fraction(d)
+                if p != q and (q + 1) % 4 != p:
+                    if abs(p - q) == 2:
+                        return x
+                    d = -d
+                return d + 90*q
+    return x
+
 class Degrees(SciNum):
     def __init__(self, deg, n_SF=math.inf):
+        if isinstance(deg, str):
+            deg = try_parse_direc(deg)
         super().__init__(deg, n_SF)
         self.num %= 360
     def __str__(self):
-        return super().__str__() + "\xb0"
+        return super().__str__() + '°'
 
 UNEXP_KW = "{} got an unexpected keyword argument '{:.200s}'"
 MULTIPVAL_KW = "{} got multiple values for argument '{:.200s}'"
@@ -99,7 +135,7 @@ class Vector:
             )
         if is_magdir:
             self.magnitude = scinum(x, n_SF, orig=x)
-            self.direc = scinum(y, n_SF, orig=y)
+            self.direc = Degrees(y, n_SF)
             n_SF = self.magnitude.n_SF
             theta = radians(self.direc.num)
             self.x = scinum(t := self.magnitude*math.cos(theta), n_SF, orig=t)
@@ -111,7 +147,11 @@ class Vector:
             x = self.x.num
             y = self.y.num
             self.magnitude = SciNum(sqrt(x*x + y*y), n_SF)
-            self.direc = Degrees(degrees(atan(y/x)), n_SF)
+            if not x:
+                atan_res = 90 if y > 0 else -90
+            else:
+                atan_res = degrees(atan(y/x))
+            self.direc = Degrees(atan_res, n_SF)
             if x < 0:
                 self.direc += 180
             elif y < 0:
@@ -146,6 +186,9 @@ class Vector:
     def __rmod__(self, other):
         return type(self)(other.x % self.x, other.y % self.y,
                           min(self.n_SF, other.n_SF))
+    def __pow__(self, other, z=None):
+        return type(self)(pow(self.x, other, z), pow(self.y, other, z),
+                          min(self.n_SF, other.n_SF))
     def dot(self, other):
         return SciNum(self.x*other.x + self.y*other.y,
                       min(self.n_SF, other.n_SF))
@@ -171,3 +214,11 @@ if __name__ == "__main__":
     print(a+b)
     print(a+c)
     print(c+d)
+    print(Degrees("NW"))
+    print(Degrees("E"))
+    print(Degrees("7 E of S"))
+    print(Degrees("7 W of S"))
+    print(Degrees("-8 N of E"))
+    print(Degrees("26 S of E"))
+    print(Degrees("33 E of N"))
+    print(Degrees("10 W of N"))
