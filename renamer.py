@@ -27,15 +27,15 @@ def namegen_from_param(
 class Renamer(ast.NodeTransformer):    
     def __init__(self, verifier=None, generator=None, taken=None):
         self.name_map = {}
-        self.taken = taken if taken is not None else set()
+        self.taken = taken = taken if taken is not None else set()
         if verifier is not None:
             self.verifier = verifier
         if generator is not None:
             self.generator = generator
         else:
             self.generator = namegen_from_param(
-                verifier = lambda name, self, _:
-                    name.isidentifier() and name not in self.taken
+                verifier = lambda name, _:
+                    name.isidentifier() and name not in taken
             )
     verifier = lambda _, name: all(map('_'.__eq__, name))
     def get_name(self, name):
