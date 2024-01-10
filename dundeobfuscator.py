@@ -20,7 +20,7 @@ class Evaluator(renamer.Renamer):
         self.name_to_node = {}
         self.definitions = {}
         frame = sys._getframe(1) if frame is None else frame
-        for name in "__name__", "__builtins__":
+        for name in "__name__", "__builtins__", "__annotations__", "__spec__", "__loader__", "__package__", "__doc__":
             if name in frame.f_globals:
                 self.set_definition(name, frame.f_globals[name])
         if not partial_only:
@@ -66,18 +66,15 @@ class Evaluator(renamer.Renamer):
         node_repr = self.get_repr(node)
         if node_repr not in self.marked_nosub:
             if (
-                (val := self.safe_eval(node)) is not NO_VALUE
+                (val := self.safe_eval_check(node)) is not NO_VALUE
                 and val is not VOID_VALUE
             ):
-                val_repr = repr(val)
-                if len(val_repr) <= MAX_REPR_THRESHOLD:
-                    with self.wrap_try(catch=SyntaxError, print_exc=False):
-                        compile(val_repr, "<test>", "exec")
-                        self.unparse_map[node_repr] = val_repr
-                        node_dump = ast.dump(node)
-                        node = ast.copy_location(ast.Constant(value=val), node)
-                        self.unparse_node_map[node_dump] = node
-                        return node
+                if len(val_repr := repr(val)) <= MAX_REPR_THRESHOLD:
+                    self.unparse_map[node_repr] = val_repr
+                    node_dump = ast.dump(node)
+                    node = ast.copy_location(ast.Constant(value=val), node)
+                    self.unparse_node_map[node_dump] = node
+                    return node
                 self.marked_nosub.add(node_repr)
         return None
     def handle_eval(self, node):
@@ -136,7 +133,7 @@ class Evaluator(renamer.Renamer):
         val = self.visit(node.value)
         set_name = False
         if (
-            (eval_val := self.safe_eval(val)) is not NO_VALUE
+            (eval_val := self.safe_eval_check(val)) is not NO_VALUE
             and eval_val is not VOID_VALUE
         ):
             set_name = True
@@ -203,6 +200,13 @@ class Evaluator(renamer.Renamer):
     def safe_eval(self, node):
         return getattr(self, "safe_eval_" + node.__class__.__name__,
                        self.generic_safe_eval)(node)
+    def safe_eval_check(self, node):
+        exp = self.safe_eval(node)
+        if exp is not NO_VALUE:
+            with self.wrap_try(catch=SyntaxError, print_exc=False):
+                compile(repr(exp), "<test>", "exec")
+                return exp
+        return NO_VALUE
     generic_safe_eval = lambda _, __: NO_VALUE
     def safe_eval_list(self, list_):
         res = []
@@ -333,3 +337,7 @@ def deobfuscate(source, evaluator=Evaluator, raw=False, *args, _depth=1, **kwarg
     transformed = evaluator(*args, frame=sys._getframe(_depth), **kwargs).visit(tree)
     ast.fix_missing_locations(transformed)
     return transformed if raw else ast.unparse(transformed)
+
+print(deobfuscate(r"""
+(a := 2, (a := 3, a) if b else c, a)
+""", evaluator=FullEvaluator))
