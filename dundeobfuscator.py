@@ -337,7 +337,3 @@ def deobfuscate(source, evaluator=Evaluator, raw=False, *args, _depth=1, **kwarg
     transformed = evaluator(*args, frame=sys._getframe(_depth), **kwargs).visit(tree)
     ast.fix_missing_locations(transformed)
     return transformed if raw else ast.unparse(transformed)
-
-print(deobfuscate(r"""
-(a := 2, (a := 3, a) if b else c, a)
-""", evaluator=FullEvaluator))
