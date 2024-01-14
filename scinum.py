@@ -7,6 +7,16 @@ from math import ceil, floor, log10 as m_log10, isinf, isnan, trunc
 def log10(x):
     return x.log10() if isinstance(x, Decimal) else m_log10(x)
 
+def sqrt(x):
+    if isinstance(x, Fraction):
+        res = (Decimal(x.numerator) / x.denominator).sqrt()
+    elif isinstance(x, SciNum):
+        res = sqrt(x.num)
+    else:
+        res = Decimal(x).sqrt()
+    res = res if res % 1 else int(res)
+    return type(x)(res, x.n_SF) if isinstance(x, SciNum) else res
+
 def num_dec_zeros(decimal):
     if isnan(decimal):
         return math.nan
