@@ -4,17 +4,7 @@ from decimal import Decimal, getcontext
 from fractions import Fraction
 from math import atan, degrees, isnan, radians
 from re import compile as pcompile
-from scinum import SciNum, scinum
-
-def sqrt(x):
-    if isinstance(x, Fraction):
-        res = (Decimal(x.numerator) / x.denominator).sqrt()
-    elif isinstance(x, SciNum):
-        res = sqrt(x.num)
-    else:
-        res = Decimal(x).sqrt()
-    res = res if res % 1 else int(res)
-    return type(x)(res, x.n_SF) if isinstance(x, SciNum) else res
+from scinum import SciNum, scinum, sqrt
 
 direc_p = pcompile(r"\s*(?:(-?(?:\d+(?:\.\d*)?|\.\d+))°?\s*)?(N(?:orth)?|S(?:outh)?|E(?:ast)?|W(?:est)?)\s*(\b[Oo][Ff]\s+)?(N(?:orth)?|S(?:outh)?|E(?:ast)?|W(?:est)?)?\s*").fullmatch
 
