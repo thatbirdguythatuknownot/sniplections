@@ -116,8 +116,14 @@ class Evaluator(renamer.Renamer):
         if visitor is not None:
             return visitor(node)
         return self.set_noded(node, self.generic_visit(node))
+    def visit_alias(self, node):
+        old_node = node
+        new_name = super().get_name(name := node.asname)
+        if new_name is not None and new_name != name:
+            node = self.new_from(node, asname=new_name)
+        self.set_noded(old_node, node)
+        return self.generic_visit(node)
     def visit_Name(self, node):
-        name = node.id
         if isinstance(node.ctx, ast.Load):
             node = self.handle_eval(node)
         else:
@@ -260,7 +266,7 @@ class Evaluator(renamer.Renamer):
             return NO_VALUE
         if not node.keywords and len(node.args) < 3:
             if (args := self.safe_eval(node.args)) is not NO_VALUE:
-                with self.wrap_try():
+                with self.wrap_try(print_exc=False):
                     return func(*args)
         return NO_VALUE
     def safe_eval_BinOp(self, node):
