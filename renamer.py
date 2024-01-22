@@ -45,10 +45,15 @@ class Renamer(ast.NodeTransformer):
             return None
         new_name = self.name_map[name] = self.generator(name)
         return new_name
-    def copy_missing(_, old_node, new_node, copy_loc=True):
-        for field in old_node._fields:
-            if not hasattr(new_node, field) and hasattr(old_node, field):
-                setattr(new_node, field, getattr(old_node, field))
+    def copy_missing(_, old_node, new_node, copy_loc=True, fields_set=None):
+        if fields_set is None:
+            for field in old_node._fields:
+                if not hasattr(new_node, field) and hasattr(old_node, field):
+                    setattr(new_node, field, getattr(old_node, field))
+        else:
+            for field in old_node._fields:
+                if field not in fields_set:
+                    setattr(new_node, field, getattr(old_node, field))
         if copy_loc:
             return ast.copy_location(new_node, old_node)
         return new_node
@@ -57,7 +62,8 @@ class Renamer(ast.NodeTransformer):
         old_node = args[1]
         if len(args) == 3:
             kwargs |= args[2]
-        return self.copy_missing(old_node, type(old_node)(**kwargs))
+        return self.copy_missing(old_node, type(old_node)(**kwargs),
+                                 fields_set=kwargs)
     def generic_visit(self, node):
         kwargs = {}
         deleted_fields = set()
@@ -108,3 +114,36 @@ def rename(source, renamer=Renamer, *args, **kwargs):
     transformed = renamer(*args, **kwargs).visit(tree)
     ast.fix_missing_locations(transformed)
     return ast.unparse(transformed)
+
+if __name__ == "__main__":
+    print(rename(r'''
+class _:
+    _ = " + "
+    class __:
+        _ = "1"
+        class ___:
+            _ = ")"
+            class ____:
+                _ = "("
+                class _____:
+                    _ = "print"
+                    class ______:
+                        _ = " = "
+                        class _______:
+                            _ = "'"
+                            class ________:
+                                _ = "str"
+                                class _________:
+                                    _ = "int"
+                                    class __________:
+                                        _ = "eval"
+                                        class ___________:
+                                            _ = "f"
+                                            class ____________:
+                                                _ = "{"
+                                                class _____________:
+                                                    _ = "}"
+
+
+exec(f"{_.__.___.____._____._}{_.__.___.____._}{_.__.___.____._____.______._______._}{_.__._}{_._}{_.__._}{_.__.___.____._____.______._}"+eval(f'{_.__.___.____._____.______._______.________._________.__________._}{_.__.___.____._}{_.__.___.____._____.______._______.________._________.__________.___________._}"{_.__.___.____._____.______._______.________._________.__________._}{_.__.___.____._}{_.__.___.____._____.______._______.________._________.__________.___________._}{_.__.___.____._____.______._______._}{_.__.___.____._____.______._______.________._}{_.__.___.____._}{_.__.___.____._____.______._______.________._________._}{_.__.___.____._}_.__._{_.__.___._}{_._}{_.__.___.____._____.______._______.________._________._}{_.__.___.____._}_.__._{_.__.___._}{_.__.___._}{_.__.___.____._____.______._______._}{_.__.___._}"{_.__.___._}')+f"{_.__.___.____._____.______._______._}{_.__.___._}")
+'''))
