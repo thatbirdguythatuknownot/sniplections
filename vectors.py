@@ -1,12 +1,25 @@
 import math
+import re
 from dataclasses import dataclass
 from decimal import Decimal, getcontext
 from fractions import Fraction
 from math import atan, degrees, isnan, radians
-from re import compile as pcompile
-from scinum import SciNum, scinum, sqrt
+from scinum import SCINUM_FORMAT, SciNum, parse_scinum_match, scinum, sqrt
 
-direc_p = pcompile(r"\s*(?:(-?(?:\d+(?:\.\d*)?|\.\d+))°?\s*)?(N(?:orth)?|S(?:outh)?|E(?:ast)?|W(?:est)?)\s*(\b[Oo][Ff]\s+)?(N(?:orth)?|S(?:outh)?|E(?:ast)?|W(?:est)?)?\s*").fullmatch
+DIREC_FORMAT = "N(?:orth)?|S(?:outh)?|E(?:ast)?|W(?:est)?"
+
+direc_p = re.compile(fr"""
+\s*                              # optional leading whitespace,
+(?:                              # followed by...
+    {SCINUM_FORMAT}              # number or fraction,
+    °?                           # followed by an optional degrees symbol,
+    \s*                          # then optional whitespace
+)?                               # ...(all optional)
+(?P<dir1>{DIREC_FORMAT})         # after, a direction,
+\s*(?:\bOF\s+)?                  # then optional "OF" (e.g. 5° North of West),
+(?P<dir2>{DIREC_FORMAT})?        # an optional other direction,
+\s*                              # and finally, optional trailing whitespace
+""", re.VERBOSE | re.IGNORECASE).fullmatch
 
 DIR_QUAD = "ENWS"
 
@@ -20,29 +33,32 @@ def get_quad(dir_name):
 def get_deg(dir_name):
     return 90 * get_quad(dir_name)
 
-def try_parse_direc(x):
+def try_parse_direc(x, n_SF=-1):
     assert isinstance(x, str)
     if m := direc_p(x):
-        match m.groups():
-            case [None, a, None, b]:
-                if b is not None:
-                    return (get_deg(a) + get_deg(b)) >> 1
-                return get_deg(a)
-            case [d, a, _, b] if d is not None is not b:
-                p = get_quad(a)
-                q = get_quad(b)
-                d = Fraction(d)
-                if p != q and (q + 1) % 4 != p:
-                    if abs(p - q) == 2:
-                        return x
-                    d = -d
-                return d + 90*q
-    return x
+        a = m["dir1"]
+        b = m["dir2"]
+        if m["num"] is None: # number group
+            if b is not None:
+                return (get_deg(a) + get_deg(b)) >> 1, n_SF
+            return get_deg(a), n_SF
+        elif b is not None:
+            p = get_quad(a)
+            q = get_quad(b)
+            d, n_SF = parse_scinum_match(m, n_SF)
+            if p != q and (q + 1) % 4 != p:
+                if abs(p - q) == 2:
+                    # opposite directions, i.e. North-South, East-West
+                    raise ValueError("cannot have opposite directions: "
+                                     f"{DIRFULL_QUAD[p]}-{DIRFULL_QUAD[q]}")
+                d = -d
+            return d + 90*q, n_SF
+    return x, n_SF
 
 class Degrees(SciNum):
     def __init__(self, deg, n_SF=math.inf):
         if isinstance(deg, str):
-            deg = try_parse_direc(deg)
+            deg, n_SF = try_parse_direc(deg, n_SF)
         super().__init__(deg, n_SF)
         self.num %= 360
     def __str__(self):
@@ -212,3 +228,4 @@ if __name__ == "__main__":
     print(Degrees("26 S of E"))
     print(Degrees("33 E of N"))
     print(Degrees("10 W of N"))
+    print(Degrees("15.2/3.40 E of S", n_SF=-1))
