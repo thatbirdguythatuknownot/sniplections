@@ -1,8 +1,11 @@
 import math
 import numbers
-from decimal import Decimal, ROUND_HALF_UP, getcontext
+import re
+from decimal import Decimal, ROUND_HALF_UP, getcontext, localcontext
 from fractions import Fraction
 from math import ceil, floor, log10 as m_log10, isinf, isnan, trunc
+
+getcontext().rounding = ROUND_HALF_UP
 
 def log10(x):
     return x.log10() if isinstance(x, Decimal) else m_log10(x)
@@ -78,6 +81,24 @@ def get_n_SF(x):
         return nint_places(x) + d_len
     return nint_place_splitted(x)[0]
 
+DECIMAL_FORMAT = r"""
+    \s*                       # optional whitespace,
+    [-+]?                     # an optional sign, then
+    (?=\d|\.\d)               # lookahead for digit or .digit
+    (\d+(?:_\d+)*+)?          # integer part (optional), followed by
+    (\.(?:\d+(?:_\d+)*+)?)?   # an optional fractional part
+    (?:E[-+]?\d+(?:_\d+)*+)?  # and optional exponent
+    \s*                       # and optional whitespace to finish
+"""
+
+SCINUM_PATTERN = re.compile(fr"""
+# all the whitespace is handled by DECIMAL_FORMAT
+    \A                                 # the start,
+    (?P<num>{DECIMAL_FORMAT})          # the numerator, then
+    (?:/(?P<denom>{DECIMAL_FORMAT}))?  # an optional denominator, and finally
+    \Z                                 # the finish
+""", re.VERBOSE | re.IGNORECASE)
+
 def scinum(*args, orig):
     if isinstance(orig, SciNum):
         return type(orig)(*args)
@@ -110,20 +131,51 @@ class SciNum(numbers.Real):
                 n_SF = num.n_SF
             num = num.num
         if isinstance(num, str):
-            num = Fraction(num)
+            if matched := SCINUM_PATTERN.match(num):
+                num = Fraction(matched.group("num"))
+                if denom := matched.group("denom"):
+                    num /= Fraction(denom)
+            else:
+                raise ValueError(f"invalid literal for SciNum: {num!r}")
+            if n_SF < 0 and num:
+                n_SF = math.inf
+                for i in 0, 1:
+                    sf = 0
+                    ipart = matched[3*i + 2]
+                    if not ipart:
+                        continue
+                    ipart = ipart.lstrip('0')
+                    dot = matched[3*i + 3]
+                    if dot:
+                        dpart = dot[1:]
+                        if ipart:
+                            sf += len(ipart) - ipart.count('_')
+                        else:
+                            dpart = dpart.lstrip('0')
+                        if dpart:
+                            sf += len(dpart) - dpart.count('_')
+                    else:
+                        sf += len(ipart := ipart.rstrip('0'))
+                        if ipart:
+                            sf -= ipart.count('_')
+                    if sf < n_SF:
+                        n_SF = sf
         elif not isinstance(num, (numbers.Integral, Fraction, Decimal)):
             num = Decimal(num)
         if not num:
-            n_SF = not isinf(n_SF) and bool(n_SF)
+            if not isinf(n_SF):
+                n_SF = int(bool(n_SF))
         elif n_SF < 0:
             n_SF = get_n_SF(num)
         if not isinf(n_SF):
             sf_round = n_SF_round(num, n_SF)
             if isinstance(num, Decimal):
-                if (to_set := max(sf_round, n_SF)) and to_set > 0:
-                    getcontext().prec = max(getcontext().prec, to_set)
-                getcontext().rounding = ROUND_HALF_UP
-            num = round(num, sf_round)
+                with localcontext() as ctx:
+                    if (to_set := max(sf_round, n_SF)) and to_set > 0:
+                        ctx.prec = max(ctx.prec, to_set)
+                    num = round(num, sf_round)
+            else:
+                num = round(num, sf_round)
         self.num = num
         self.n_SF = n_SF
     def __add__(self, other):
@@ -134,10 +186,12 @@ class SciNum(numbers.Real):
         t = self.num + B
         if not isinf(n):
             if isinstance(t, Decimal):
-                if n and n > 0:
-                    getcontext().prec = max(getcontext().prec, n)
-                getcontext().rounding = ROUND_HALF_UP
-            t = round(t, n)
+                with localcontext() as ctx:
+                    if n and n > 0:
+                        ctx.prec = max(ctx.prec, n)
+                    t = round(t, n)
+            else:
+                t = round(t, n)
         return type(self)(t, n + nint_places(t))
     __radd__ = __add__
     def __sub__(self, other):
@@ -220,3 +274,7 @@ if __name__ == "__main__":
     print(SciNum("5", 3) / SciNum("2", 2))
     print(SciNum("1", 3) / SciNum("7", 2))
     print(repr(SciNum(1/8, -1)))
+    print(SciNum("4.49/0.2_2", -1))
+    print(SciNum("4.49/0.2_2_2", -1))
+    print(SciNum("4.49000/0.2_2_2_2", -1))
+    print(SciNum("4.49000/0.2_2_2_2551", -1))
