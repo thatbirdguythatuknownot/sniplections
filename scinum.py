@@ -82,22 +82,51 @@ def get_n_SF(x):
     return nint_place_splitted(x)[0]
 
 DECIMAL_FORMAT = r"""
-    \s*                       # optional whitespace,
-    [-+]?                     # an optional sign, then
-    (?=\d|\.\d)               # lookahead for digit or .digit
-    (\d+(?:_\d+)*+)?          # integer part (optional), followed by
-    (\.(?:\d+(?:_\d+)*+)?)?   # an optional fractional part
-    (?:E[-+]?\d+(?:_\d+)*+)?  # and optional exponent
-    \s*                       # and optional whitespace to finish
+    \s*                        # optional whitespace,
+    [-+]?                      # an optional sign, then
+    (?=\d|\.\d)                # lookahead for digit or .digit
+    (\d+(?:_\d+)*+)?           # integer part (optional), followed by
+    (\.(?:\d+(?:_\d+)*+)?)?    # an optional fractional part
+    (?:E[-+]?\d+(?:_\d+)*+)?   # and optional exponent
+    \s*                        # and optional whitespace to finish
 """
 
-SCINUM_PATTERN = re.compile(fr"""
+SCINUM_FORMAT = fr"""
 # all the whitespace is handled by DECIMAL_FORMAT
-    \A                                 # the start,
     (?P<num>{DECIMAL_FORMAT})          # the numerator, then
-    (?:/(?P<denom>{DECIMAL_FORMAT}))?  # an optional denominator, and finally
-    \Z                                 # the finish
-""", re.VERBOSE | re.IGNORECASE)
+    (?:/(?P<denom>{DECIMAL_FORMAT}))?  # an optional denominator
+"""
+
+SCINUM_PATTERN = re.compile(SCINUM_FORMAT, re.VERBOSE | re.IGNORECASE)
+
+def parse_scinum_match(matched, n_SF):
+    num = Fraction(matched["num"])
+    if denom := matched["denom"]:
+        num /= Fraction(denom)
+    if n_SF < 0 and num:
+        n_SF = math.inf
+        for i in 0, 1:
+            sf = 0
+            ipart = matched[3*i + 2]
+            if not ipart:
+                continue
+            ipart = ipart.lstrip('0')
+            dot = matched[3*i + 3]
+            if dot:
+                dpart = dot[1:]
+                if ipart:
+                    sf += len(ipart) - ipart.count('_')
+                else:
+                    dpart = dpart.lstrip('0')
+                if dpart:
+                    sf += len(dpart) - dpart.count('_')
+            else:
+                sf += len(ipart := ipart.rstrip('0'))
+                if ipart:
+                    sf -= ipart.count('_')
+            if sf < n_SF:
+                n_SF = sf
+    return num, n_SF
 
 def scinum(*args, orig):
     if isinstance(orig, SciNum):
@@ -131,35 +160,10 @@ class SciNum(numbers.Real):
                 n_SF = num.n_SF
             num = num.num
         if isinstance(num, str):
-            if matched := SCINUM_PATTERN.match(num):
-                num = Fraction(matched.group("num"))
-                if denom := matched.group("denom"):
-                    num /= Fraction(denom)
-            else:
+            matched = SCINUM_PATTERN.fullmatch(s)
+            if not matched:
                 raise ValueError(f"invalid literal for SciNum: {num!r}")
-            if n_SF < 0 and num:
-                n_SF = math.inf
-                for i in 0, 1:
-                    sf = 0
-                    ipart = matched[3*i + 2]
-                    if not ipart:
-                        continue
-                    ipart = ipart.lstrip('0')
-                    dot = matched[3*i + 3]
-                    if dot:
-                        dpart = dot[1:]
-                        if ipart:
-                            sf += len(ipart) - ipart.count('_')
-                        else:
-                            dpart = dpart.lstrip('0')
-                        if dpart:
-                            sf += len(dpart) - dpart.count('_')
-                    else:
-                        sf += len(ipart := ipart.rstrip('0'))
-                        if ipart:
-                            sf -= ipart.count('_')
-                    if sf < n_SF:
-                        n_SF = sf
+            num, n_SF = parse_scinum_match(matched, n_SF)
         elif not isinstance(num, (numbers.Integral, Fraction, Decimal)):
             num = Decimal(num)
         if not num:
