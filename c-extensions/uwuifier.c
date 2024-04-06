@@ -1744,7 +1744,7 @@ uwuify(PyObject *Py_UNUSED(_),
         }
         else {
             FMT_ERROR_RET(Type,
-                          "'tildify' expected 'float' for 'stutter_strength' "
+                          "'uwuify' expected 'float' for 'stutter_strength' "
                           "argument, got '%.200s'",
                           Py_TYPE(SS_o)->tp_name);
         }
@@ -1759,7 +1759,7 @@ uwuify(PyObject *Py_UNUSED(_),
         }
         else {
             FMT_ERROR_RET(Type,
-                          "'tildify' expected 'float' for 'emoji_strength' "
+                          "'uwuify' expected 'float' for 'emoji_strength' "
                           "argument, got '%.200s'",
                           Py_TYPE(ES_o)->tp_name);
         }
@@ -1774,7 +1774,7 @@ uwuify(PyObject *Py_UNUSED(_),
         }
         else {
             FMT_ERROR_RET(Type,
-                          "'tildify' expected 'float' for 'tilde_strength' "
+                          "'uwuify' expected 'float' for 'tilde_strength' "
                           "argument, got '%.200s'",
                           Py_TYPE(TS_o)->tp_name);
         }
@@ -1783,7 +1783,7 @@ uwuify(PyObject *Py_UNUSED(_),
 skip_keyarg_checks:
     if (!PyUnicode_CheckExact(text)) {
         FMT_ERROR_RET(Type,
-                      "'tildify' expected 'str' for 'text' argument, "
+                      "'uwuify' expected 'str' for 'text' argument, "
                       "got '%.200s'",
                       Py_TYPE(text)->tp_name);
     }
