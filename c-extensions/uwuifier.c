@@ -1792,7 +1792,7 @@ static PyModuleDef_Slot uwuifier_slots[] = {
 
 static struct PyModuleDef uwuifiermodule = {
     PyModuleDef_HEAD_INIT,
-    .m_name = "_uwuifier",
+    .m_name = "uwuifier",
     .m_doc = ":3",
     .m_size = sizeof(uwuifier_modstate),
     .m_methods = uwuifier_methods,
@@ -1802,7 +1802,7 @@ static struct PyModuleDef uwuifiermodule = {
 };
 
 PyMODINIT_FUNC
-PyInit__uwuifier(void)
+PyInit_uwuifier(void)
 {
     srand((unsigned)time(NULL));
     return PyModuleDef_Init(&uwuifiermodule);
