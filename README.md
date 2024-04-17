@@ -414,3 +414,14 @@ b = Vector(15, direc="10 E of N", n_SF=-1)
 # prints in the format of (x, y) | magnitude -> direction (in degrees)
 print(a + b) # (35, 30) | 46 -> 41°
 ```
+
+**recursive_bool.py**<br/>
+A recursive bool implementation according to the rules set by <@!754441517925662750> (nongshimkamjag). Example:
+```py
+from recursive_bool import rbool
+
+print(rbool([[], []]))  # False
+print(rbool([[]]))  # False
+print(rbool([]))  # False
+print(rbool([[0]]))  # True
+```
