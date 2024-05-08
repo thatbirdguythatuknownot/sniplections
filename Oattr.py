@@ -11,7 +11,6 @@ def check_frame(frame):
     instrs = [*get_instructions(frame.f_code)]
     lasti = frame.f_lasti
     offset_cache = []
-    to_check = []
     i = 0
     while i < len(instrs):
         instr = instrs[i]
@@ -19,15 +18,14 @@ def check_frame(frame):
         if i > len(offset_cache):
             offset_cache.append(instr.offset)
         if instr.offset == lasti:
-            if instr.opcode in jump_nocond:
-                lasti = instr.argval
-            else:
-                if lasti == frame.f_lasti:
-                    try:
-                        instr = instrs[i]
-                    except IndexError:
-                        instr = None
+            if lasti == frame.f_lasti:
+                try:
+                    instr = instrs[i]
+                except IndexError:
+                    instr = None
+            if instr is None or instr.opcode not in jump_nocond:
                 break
+            lasti = instr.argval
             try:
                 i = offset_cache.index(lasti)
                 continue
@@ -58,5 +56,3 @@ class O(metaclass=O_meta):
         if check_frame(frame):
             return self
         return attrs
-
-O.a.b.c.d.e
