@@ -425,3 +425,12 @@ print(rbool([[]]))  # False
 print(rbool([]))  # False
 print(rbool([[0]]))  # True
 ```
+
+**Oattr.py**<br/>
+A class that returns attributes chain-accessed as a list, I guess. Original idea from <@!207934404922703873> (andrej730). Works on 3.12+. Example:
+```py
+from Oattr import O
+
+print(O.a) # ['a']
+print(O.a.b.c.d.e) # ['a', 'b', 'c', 'd', 'e']
+```
