@@ -201,8 +201,10 @@ class Vector:
     def cross(self, other):
         return SciNum(self.x*other.y - self.y*other.x,
                       min(self.n_SF, other.n_SF))
+    def perp(self):
+        return type(self)(self.y, -self.x, self.n_SF)
     def __neg__(self):
-        return Vector(-self.x, -self.y, n_SF)
+        return Vector(-self.x, -self.y, self.n_SF)
     def __repr__(self):
         return f"Vector(x={self.x!r}, y={self.y!r}, direc={self.direc!r})"
     def __str__(self):
@@ -229,3 +231,5 @@ if __name__ == "__main__":
     print(Degrees("33 E of N"))
     print(Degrees("10 W of N"))
     print(Degrees("15.2/3.40 E of S", n_SF=-1))
+    print(-Vector(5, 7))
+    print(Vector(5, 7).perp())
