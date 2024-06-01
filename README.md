@@ -434,3 +434,25 @@ from Oattr import O
 print(O.a) # ['a']
 print(O.a.b.c.d.e) # ['a', 'b', 'c', 'd', 'e']
 ```
+
+**nonlocals_proxy.py**<br/>
+A `nonlocals()` function. Untested. Example:
+```py
+from nonlocals_proxy import nonlocals
+
+def a():
+    b = 25
+    def g():
+        nonlocal b
+        nonlocals()['b'] *= 2
+    print(b)
+    g()
+    print(b)
+
+a()
+```
+Output:
+```
+25
+50
+```
