@@ -436,7 +436,7 @@ print(O.a.b.c.d.e) # ['a', 'b', 'c', 'd', 'e']
 ```
 
 **nonlocals_proxy.py**<br/>
-A `nonlocals()` function. Untested. Example:
+A `nonlocals()` function. Tested on 3.12+. Example:
 ```py
 from nonlocals_proxy import nonlocals
 
