@@ -10,7 +10,7 @@ class _nonlocals_proxy:
     def __init__(self, frame=None):
         if frame is None:
             frame = _getframe(1)
-        func = get_referrers(frame.f_code)[0]
+        func = next(filter(callable, get_referrers(frame.f_code)))
         self.__func = func
         self.__closure_arr = func.__closure__ or ()
     def __get_closure_from_name(self, k):
