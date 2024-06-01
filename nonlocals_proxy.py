@@ -67,8 +67,8 @@ class _nonlocals_proxy:
             try:
                 E, = args
             except ValueError as e:
-                e.add_note("_nonlocals_proxy.update() expected 0 or 1 "
-                           "positional arguments")
+                e.add_note("note: _nonlocals_proxy.update() expected "
+                           "0 or 1 positional arguments")
                 raise
             if isinstance(E, (dict, _nonlocals_proxy)) or hasattr(E, "keys"):
                 for key in E:
