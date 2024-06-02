@@ -14,6 +14,7 @@ def namegen_from_param(
             idx_stack[i] += 1
             if idx_stack[i] >= LEN_SEQ:
                 idx_stack[i] = 0
+                i -= 1
             else:
                 break
         else:
