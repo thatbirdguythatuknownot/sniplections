@@ -456,3 +456,22 @@ Output:
 25
 50
 ```
+
+**set_consts.py**<br/>
+A context manager to set the constants in a context. Tested on 3.12+. Example:
+```py
+from set_consts import set_consts
+
+print('abc')
+
+with set_consts(abc=5):
+    print('abc')
+
+print('abc')
+```
+Output:
+```
+abc
+5
+abc
+```
