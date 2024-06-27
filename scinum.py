@@ -160,7 +160,7 @@ class SciNum(numbers.Real):
                 n_SF = num.n_SF
             num = num.num
         if isinstance(num, str):
-            matched = SCINUM_PATTERN.fullmatch(s)
+            matched = SCINUM_PATTERN.fullmatch(num)
             if not matched:
                 raise ValueError(f"invalid literal for SciNum: {num!r}")
             num, n_SF = parse_scinum_match(matched, n_SF)
