@@ -1,5 +1,5 @@
 # sniplections/c-extensions
-Collection of C extensions and possibly Cython scripts. Probably all of the C extension functions are *really* unsafe.
+Collection of C extensions (Python and Lua) and possibly Cython scripts. Most of the C extension functions are *really* unsafe.
 
 
 **algos_c.c**<br/>
@@ -58,4 +58,10 @@ For [this repo](https://github.com/trygvrad/python-speedup-comparison). Built wi
 ```bash
 clang -O2 -ffast-math -c -I"C:\Program Files\Python311\include" -I"C:\Program Files\Python311\Lib\site-packages\numpy\core\include" pdist_cext.c -o pdist_cext.o
 clang -O2 -shared -o "C:\Program Files\Python311\Lib\pdist_cext.pyd" pdist_cext.o -lPython311 -L"C:\Program Files\Python311\libs"
+```
+
+**keyboard.c**<br/>
+A Lua C-extension for keyboard press detection, `sleep()` function, and ANSI escape code setup. Built with this command:
+```bash
+gcc -I"C:\Program Files\lua\include" -L"C:\Program Files\lua\src" -shared -o keyboard.dll keyboard.c -llua
 ```
