@@ -1,16 +1,88 @@
-local function refresh()
-    io.write("\x1b[0;0H")
-    io.write("\x1b[38;2;35;110;210m")
-end
+local keyboard = require "keyboard"
 
-local OPTIONS = {
-    "Boot into Terminal",
-    "Check peripherals",
-    "Shutdown"
+local COLORS_FORE = {
+    RESET = "\x1b[0m",
+    BLUE = "\x1b[38;2;35;110;210m"
 }
 
 local state = {
-    option = 1
+    option = 1,
+    display_option = 0,
+}
+
+local update_screen
+
+local function clear_screen(hard_reset)
+    if hard_reset then
+        keyboard.flush_pressed()
+        os.execute("cls")
+    else
+        io.write(("\x1b[2J\x1b[0;0H"):format(code))
+    end
+end
+
+local function refresh(do_hard_reset)
+    if do_hard_reset ~= nil then
+        clear_screen(do_hard_reset)
+    else
+        io.write("\x1b[0;0H")
+    end
+end
+
+local function clear_key_buffers()
+    keyboard.wasPressed(keyboard.VK_UP)
+    keyboard.wasPressed(keyboard.VK_DOWN)
+    keyboard.wasPressed(keyboard.VK_RETURN)
+end
+
+local TERMINAL_COMMANDS = {
+    ["menu"] = function()
+        return 0, true
+    end
+}
+
+local OPTIONS = {
+    [1] = {text = "Boot into Terminal", handler = function()
+        print(
+"Welcome to the terminal.\n\
+You can go back to the start menu with the \"menu\" command."
+        )
+        io.write("\x1b[?25h")  -- show cursor
+        while true do
+            io.write(">")
+            local command = io.read():gsub("^%s*(.-)%s*$", "%1")
+            local handler = TERMINAL_COMMANDS[command]
+            if handler then
+                local success, res_0, break_loop = pcall(handler)
+                if success then
+                    if res_0 ~= 0 then
+                        print(
+                            ("command returned non-zero exit code %d")
+                            :format(res_0)
+                        )
+                    end
+                    if break_loop then
+                        break
+                    end
+                else
+                    print("command error!")
+                    print(res_0)
+                end
+            else
+                print(("no such command: '%s'"):format(command))
+            end
+        end
+    end},
+    [2] = {text = "Check peripherals", handler = function()
+        print("Unimplemented.")
+        keyboard.wait(1)
+    end},
+    [3] = {text = "Shutdown", handler = function()
+        io.write(COLORS_FORE.BLUE)
+        print("Goodnight.")
+        keyboard.wait(1)
+        error(nil)
+    end}
 }
 
 local START_DATE_UTC = {year = 2024, yday = 189, hour = 6, min = 48, sec = 49}
@@ -81,11 +153,11 @@ local function print_time_day()
     local table = os.date("!*t")
     local mc_time = mc_time_elapsed(table, START_DATE_UTC)
     if mc_time.hour > 5 and mc_time.hour <= 12 then
-        print("Good morning.\n")
+        print("Good morning.  \n")
     elseif mc_time.hour > 12 and mc_time.hour <= 18 then
         print("Good afternoon.\n")
     else
-        print("Good evening.\n")
+        print("Good evening.  \n")
     end
     local hr = h24_to_h12(mc_time.hour)
     local am_or_pm = "AM"
@@ -101,32 +173,51 @@ end
 local function print_options()
     for i = 1, #OPTIONS do
         if i == state.option then
-            print("[ " .. OPTIONS[i] .. " ]")
+            print("[ " .. OPTIONS[i].text .. " ]")
         else
-            print("  " .. OPTIONS[i] .. "  ")
+            print("  " .. OPTIONS[i].text .. "  ")
         end
     end
 end
 
-local function update_screen()
-    refresh()
-    print_time_day()
-    print_options()
+update_screen = function(reloading_start_menu)
+    if state.display_option == 0 then
+        local refresh_option = nil
+        if not reloading_start_menu then
+            refresh_option = false
+        end
+        refresh(refresh_option)
+
+        io.write("\x1b[?25l")  -- hide cursor
+        io.write(COLORS_FORE.BLUE)
+        print_time_day()
+        print_options()
+    else
+        local setup = OPTIONS[state.display_option].setup
+        if setup then
+            setup()
+        end
+
+        refresh(true)
+
+        coroutine.wrap(OPTIONS[state.display_option].handler)()
+        clear_key_buffers()
+        state.display_option = 0
+        update_screen()
+    end
 end
 
-local keyboard = require "keyboard"
-
-keyboard.setup()       -- enable ANSI escapes
-os.execute("cls")      -- clear console
-io.write("\x1b[?25l")  -- hide cursor
-
--- clear buffer
-keyboard.wasPressed(keyboard.VK_UP)
-keyboard.wasPressed(keyboard.VK_DOWN)
+keyboard.setup()  -- enable ANSI escapes
+clear_screen(true)
+clear_key_buffers()
 
 local success, res = pcall(function()
     while true do
-        if keyboard.wasPressed(keyboard.VK_UP) then
+        if keyboard.wasPressed(keyboard.VK_RETURN) then
+            state.display_option = state.option
+            update_screen()
+            goto loop_end
+        elseif keyboard.wasPressed(keyboard.VK_UP) then
             state.option = state.option - 2
         elseif not keyboard.wasPressed(keyboard.VK_DOWN) then
             goto wait_label
@@ -135,13 +226,17 @@ local success, res = pcall(function()
 
         ::wait_label::
         keyboard.wait(0.05)
-        update_screen()
+        update_screen(true)
+
+        ::loop_end::
     end
 end)
 
-io.write("\x1b[0m")  -- clear effects
+io.write(COLORS_FORE.RESET)  -- clear color
 io.write("\x1b[?25h")  -- show cursor
 
-if not success then
+clear_screen(true)  -- hard reset
+
+if not success and res then
     print(res)
 end
