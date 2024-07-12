@@ -4,6 +4,7 @@
 #include <windows.h>
 #include <stdint.h>
 #include <math.h>
+#include <conio.h>
 
 static int l_wasPressed(lua_State *L)
 {
@@ -64,10 +65,19 @@ static int l_setup(lua_State *L)
     return 0;
 }
 
+static int l_flush_pressed(lua_State *L)
+{
+    while (_kbhit()) {
+        _getch();
+    }
+    return 0;
+}
+
 static const luaL_Reg keyboard[] = {
     {"wasPressed", l_wasPressed},
     {"wait", l_wait},
     {"setup", l_setup},
+    {"flush_pressed", l_flush_pressed},
     {NULL, NULL}
 };
 
