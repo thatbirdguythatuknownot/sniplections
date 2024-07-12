@@ -14,7 +14,7 @@ local update_screen
 
 local function clear_screen(hard_reset)
     if hard_reset then
-        keyboard.flush_pressed()
+        keyboard.flushPressed()
         os.execute("cls")
     else
         io.write(("\x1b[2J\x1b[0;0H"):format(code))
@@ -213,16 +213,20 @@ clear_key_buffers()
 
 local success, res = pcall(function()
     while true do
-        if keyboard.wasPressed(keyboard.VK_RETURN) then
-            state.display_option = state.option
-            update_screen()
-            goto loop_end
-        elseif keyboard.wasPressed(keyboard.VK_UP) then
-            state.option = state.option - 2
-        elseif not keyboard.wasPressed(keyboard.VK_DOWN) then
-            goto wait_label
+        if keyboard.hasFocus() then
+            if keyboard.wasPressed(keyboard.VK_RETURN) then
+                state.display_option = state.option
+                update_screen()
+                goto loop_end
+            elseif keyboard.wasPressed(keyboard.VK_UP) then
+                state.option = state.option - 2
+            elseif not keyboard.wasPressed(keyboard.VK_DOWN) then
+                goto wait_label
+            end
+            state.option = state.option % #OPTIONS + 1
+        else
+            clear_key_buffers()
         end
-        state.option = state.option % #OPTIONS + 1
 
         ::wait_label::
         keyboard.wait(0.05)
