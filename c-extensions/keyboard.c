@@ -65,7 +65,7 @@ static int l_setup(lua_State *L)
     return 0;
 }
 
-static int l_flush_pressed(lua_State *L)
+static int l_flushPressed(lua_State *L)
 {
     while (_kbhit()) {
         _getch();
@@ -73,11 +73,22 @@ static int l_flush_pressed(lua_State *L)
     return 0;
 }
 
+static int l_hasFocus(lua_State *L)
+{
+    HWND console = GetConsoleWindow();
+    if (console == NULL) {
+        return luaL_error(L, "program does not have a console window");
+    }
+    lua_pushboolean(L, console == GetForegroundWindow());
+    return 1;
+}
+
 static const luaL_Reg keyboard[] = {
     {"wasPressed", l_wasPressed},
     {"wait", l_wait},
     {"setup", l_setup},
-    {"flush_pressed", l_flush_pressed},
+    {"flushPressed", l_flushPressed},
+    {"hasFocus", l_hasFocus},
     {NULL, NULL}
 };
 
