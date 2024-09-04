@@ -10,7 +10,9 @@ else:
 
 hasjrel = {*hasjrel}
 
-def has_call(frame):
+def has_call(frame=None):
+    if frame is None:
+        frame = _f(2)
     effect = 0
     has_ext = False
     oparg = 0
