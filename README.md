@@ -475,3 +475,19 @@ abc
 5
 abc
 ```
+
+**methodproperty.py**<br/>
+A `property()` with a `callgetter`. Tested on 3.12+. Example:
+```py
+class A:
+    @methodproperty
+    def t(self):
+        return 5
+    @t.callgetter
+    def _(self, a, b):
+        return a + b
+
+a = A()
+print(a.t)  # 5
+print(a.t(1, 2))  # 3
+```
