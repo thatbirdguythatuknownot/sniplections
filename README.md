@@ -491,3 +491,31 @@ a = A()
 print(a.t)  # 5
 print(a.t(1, 2))  # 3
 ```
+
+**shapegetter.py**<br/>
+A function to get the shape of the (first) assignment the callee function's call is being unpacked in. Returns `None` if it's neither directly passed to an assignment OR if the callee function's call is used as an expression. Tested on 3.12+. Example:
+```py
+from shapegetter import get_assign_shape
+
+def g():
+    shape = get_assign_shape()
+    match shape:
+        case [_, _, _]:
+            return "now", "three", "args"
+        case [_, _]:
+            return "two", "arguments"
+    return "one"
+
+a = g()
+print(a)
+a, b = g()
+print(a, b)
+a, b, c = g()
+print(a, b, c)
+```
+Output:
+```
+one
+two arguments
+now three args
+```
