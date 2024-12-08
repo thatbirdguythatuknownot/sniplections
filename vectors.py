@@ -38,21 +38,26 @@ def try_parse_direc(x, n_SF=-1):
     if m := direc_p(x):
         a = m["dir1"]
         b = m["dir2"]
+
         if m["num"] is None: # number group
             if b is not None:
                 return (get_deg(a) + get_deg(b)) >> 1, n_SF
             return get_deg(a), n_SF
+
         elif b is not None:
             p = get_quad(a)
             q = get_quad(b)
             d, n_SF = parse_scinum_match(m, n_SF)
+
             if p != q and (q + 1) % 4 != p:
                 if abs(p - q) == 2:
                     # opposite directions, i.e. North-South, East-West
                     raise ValueError("cannot have opposite directions: "
                                      f"{DIRFULL_QUAD[p]}-{DIRFULL_QUAD[q]}")
                 d = -d
+
             return d + 90*q, n_SF
+
     return x, n_SF
 
 class Degrees(SciNum):
@@ -71,14 +76,16 @@ class Vector:
     def __init__(self, *args, **kwargs):
         is_magdir = None
         x = y = 0
-        n_SF = math.inf
+        n_SF = None
         l_args = len(args)
+
         if l_args == 3:
             if kwargs:
                 kw = next(iter(kwargs))
                 fm = MULTIPVAL_KW if kw in {"x", "y", "n_SF", "magnitude", "direc"} else UNEXP_KW
                 raise TypeError(fm.format("Vector()", kw))
             x, y, n_SF = args
+
         elif l_args == 2:
             for kw, v in kwargs.items():
                 if kw == "n_SF":
@@ -87,6 +94,7 @@ class Vector:
                     fm = MULTIPVAL_KW if kw in {"x", "y", "magnitude", "direc"} else UNEXP_KW
                     raise TypeError(fm.format("Vector()", kw))
             x, y = args
+
         elif l_args == 1:
             gave_y = False
             options = {"x", "magnitude"}
@@ -109,6 +117,7 @@ class Vector:
                     fm = MULTIPVAL_KW if kw in options else UNEXP_KW
                     raise TypeError(fm.format("Vector()", kw))
             x, = args
+
         elif not l_args:
             for kw, v in kwargs.items():
                 if kw == "n_SF":
@@ -139,6 +148,10 @@ class Vector:
             raise TypeError(
                 f"Vector() takes 3 positional arguments but {l_args} were given"
             )
+
+        if n_SF is None:
+            n_SF = math.inf
+
         if is_magdir:
             self.magnitude = scinum(x, n_SF, orig=x)
             self.direc = Degrees(y, n_SF)
@@ -146,67 +159,110 @@ class Vector:
             theta = radians(self.direc.num)
             self.x = scinum(t := self.magnitude*math.cos(theta), n_SF, orig=t)
             self.y = scinum(t := self.magnitude*math.sin(theta), n_SF, orig=t)
+
         else:
             self.x = scinum(x, n_SF, orig=x)
             self.y = scinum(y, n_SF, orig=y)
             n_SF = min(self.x.n_SF, self.y.n_SF)
+
             x = self.x.num
             y = self.y.num
             self.magnitude = SciNum(sqrt(x*x + y*y), n_SF)
+
             if not x:
                 atan_res = 90 if y > 0 else -90
             else:
                 atan_res = degrees(atan(y/x))
+
             self.direc = Degrees(atan_res, n_SF)
             if x < 0:
                 self.direc += 180
             elif y < 0:
                 self.direc += 360
+
         self.n_SF = n_SF
+
     def __add__(self, other):
-        x = self.x + other.x
-        y = self.y + other.y
-        return Vector(x, y, min(self.n_SF, other.n_SF))
+        if isinstance(other, Vector):
+            x = self.x + other.x
+            y = self.y + other.y
+            return type(self)(x, y, min(self.n_SF, other.n_SF))
+        return type(self)(self.x + other, self.y + other, self.n_SF)
+
     __radd__ = __add__
+
     def __sub__(self, other):
         return self + -other
+
+    def __rsub__(self, other):
+        return -self + other
+
     def __mul__(self, other):
-        return type(self)(self.x * other.x, self.y * other.y,
-                          min(self.n_SF, other.n_SF))
+        if isinstance(other, Vector):
+            return type(self)(self.x * other.x, self.y * other.y,
+                              min(self.n_SF, other.n_SF))
+        return type(self)(self.x * other, self.y * other, self.n_SF)
+
     __rmul__ = __mul__
+
     def __truediv__(self, other):
-        return type(self)(self.x / other.x, self.y / other.y,
-                          min(self.n_SF, other.n_SF))
+        if isinstance(other, Vector):
+            return type(self)(self.x / other.x, self.y / other.y,
+                              min(self.n_SF, other.n_SF))
+        return type(self)(self.x / other, self.y / other, self.n_SF)
+
     def __rtruediv__(self, other):
-        return type(self)(other.x / self.x, other.y / self.y,
-                          min(self.n_SF, other.n_SF))
+        if isinstance(other, Vector):
+            return type(self)(other.x / self.x, other.y / self.y,
+                              min(self.n_SF, other.n_SF))
+        return type(self)(other / self.x, other / self.y, self.n_SF)
+
     def __floordiv__(self, other):
-        return type(self)(self.x // other.x, self.y // other.y,
-                          min(self.n_SF, other.n_SF))
+        if isinstance(other, Vector):
+            return type(self)(self.x // other.x, self.y // other.y,
+                              min(self.n_SF, other.n_SF))
+        return type(self)(self.x // other, self.y // other, self.n_SF)
+
     def __rfloordiv__(self, other):
-        return type(self)(other.x // self.x, other.y // self.y,
-                          min(self.n_SF, other.n_SF))
+        if isinstance(other, Vector):
+            return type(self)(other.x // self.x, other.y // self.y,
+                              min(self.n_SF, other.n_SF))
+        return type(self)(other // self.x, other // self.y, self.n_SF)
+
     def __mod__(self, other):
-        return type(self)(self.x % other.x, self.y % other.y,
-                          min(self.n_SF, other.n_SF))
+        return self - (self // other)
+
     def __rmod__(self, other):
-        return type(self)(other.x % self.x, other.y % self.y,
-                          min(self.n_SF, other.n_SF))
+        return other - (other // self)
+
     def __pow__(self, other, z=None):
         return type(self)(pow(self.x, other, z), pow(self.y, other, z),
                           min(self.n_SF, other.n_SF))
+
     def dot(self, other):
         return SciNum(self.x*other.x + self.y*other.y,
                       min(self.n_SF, other.n_SF))
+    d = dot
+
     def cross(self, other):
         return SciNum(self.x*other.y - self.y*other.x,
                       min(self.n_SF, other.n_SF))
+    c = cross
+
     def perp(self):
         return type(self)(self.y, -self.x, self.n_SF)
+    P = perp
+
+    def conjugate(self):
+        return type(self)(self.x, -self.y, self.n_SF)
+    C = conjugate
+
     def __neg__(self):
         return Vector(-self.x, -self.y, self.n_SF)
+
     def __repr__(self):
         return f"Vector(x={self.x!r}, y={self.y!r}, direc={self.direc!r})"
+
     def __str__(self):
         return f"({self.x!s}, {self.y!s}) | {self.magnitude!s} -> {self.direc!s}"
 
