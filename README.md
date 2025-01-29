@@ -519,3 +519,11 @@ one
 two arguments
 now three args
 ```
+
+**resistorread.py**<br/>
+Reads resistors' color sequence and outputs their ohm-tolerance equivalent (TODO: vice versa and temperature coefficient too). Example:
+```py
+from resistorread import *
+
+read(BLUE, RED, BROWN, GOLD)  # 620 Ω ± 5%
+```
