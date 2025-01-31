@@ -27,7 +27,7 @@ class partialtrail:
                 pholders.append(i)
         lastidx = len(types) - 1
         npholders = len(pholders)
-        class Wrapper(type(obj)):
+        class Wrapper:
             __slots__ = "__obj", "__val", "__idx"
             def __init__(self, /, obj, nfilled):
                 self.__obj = obj
@@ -36,13 +36,13 @@ class partialtrail:
                 assert nfilled < npholders, "what"
             def __eval(self, /, do_after=True, skiplast=False):
                 obj = self.__obj
-                if isinstance(obj, Wrapper):
-                    idx = obj.__idx + 1
+                if isinstance(obj, Wrapper) and self.__idx > 0:
+                    idx = pholders[obj.__idx] + 1
                     obj = obj.__eval(False)
                 else:
                     idx = 0
                 pidx = pholders[self.__idx]
-                for i in range(idx, pidx - 1):
+                for i in range(idx, pidx):
                     val = vals[i]
                     if types[i]:
                         obj = obj[val]
@@ -84,7 +84,6 @@ class partialtrail:
                 else:
                     setattr(obj, val, setto)
             def __check(self, /, is_getitem):
-                idx = self.__idx
                 if types[pholders[self.__idx]] != is_getitem:
                     exp = '[]' if is_getitem else '.'
                     raise TypeError(f"filler mismatch! (expected: {exp})")
@@ -101,5 +100,5 @@ class partialtrail:
             def __setattr__(self, /, attr, val):
                 if attr.startswith("_Wrapper__"):
                     return object.__setattr__(self, attr, val)
-                self.__setv(attr, val, True)
+                self.__setv(attr, val, False)
         return Wrapper(obj, 0)
