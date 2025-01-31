@@ -527,3 +527,28 @@ from resistorread import *
 
 read(BLUE, RED, BROWN, GOLD)  # 620 Ω ± 5%
 ```
+
+**partialtrail.py**<br/>
+Rough wrapper for dynamically filled trailers (subscripts and attributes). Used like this:
+```py
+from partialtrail import partialtrail
+
+# separated `view` variable to be clearer
+view = partialtrail[...][::-1]
+x = view([range(5), range(0, 10, 2), range(0, 15, 3)])
+print(x[0])
+print(x[2])
+
+view = partialtrail[1]._
+v = ["abc", "xyz", "def"]
+for x in v:
+    print(view(x).encode())
+```
+Output:
+```
+range(4, -1, -1)
+range(12, -3, -3)
+b'b'
+b'y'
+b'e'
+```
