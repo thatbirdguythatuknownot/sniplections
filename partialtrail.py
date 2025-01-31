@@ -62,6 +62,11 @@ class partialtrail:
                         else:
                             obj = getattr(obj, val)
                 return obj
+            def __peval(self, /):
+                idx = self.__idx
+                if idx + 1 == npholders:
+                    return self.__eval()
+                return Wrapper(self, idx + 1)
             def __setv(self, /, val, setto, is_getitem):
                 self.__check(is_getitem)
                 idx = self.__idx
@@ -86,15 +91,11 @@ class partialtrail:
             def __getitem__(self, /, val):
                 self.__check(True)
                 self.__val = val
-                if idx + 1 == npholders:
-                    return self.__eval()
-                return Wrapper(self, idx + 1)
+                return self.__peval()
             def __getattr__(self, /, attr):
                 self.__check(False)
                 self.__val = attr
-                if idx + 1 == npholders:
-                    return self.__eval()
-                return Wrapper(self, idx + 1)
+                return self.__peval()
             def __setitem__(self, /, x, val):
                 self.__setv(x, val, True)
             def __setattr__(self, /, attr, val):
