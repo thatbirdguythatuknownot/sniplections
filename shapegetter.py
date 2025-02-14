@@ -12,10 +12,13 @@ hasjrel = {*hasjrel}
 
 UNPACK_SEQUENCE = opmap['UNPACK_SEQUENCE']
 UNPACK_EX = opmap['UNPACK_EX']
+COPY = opmap['COPY']
 
-def get_assign_shape(frame=None):
+def get_assign_shapes(frame=None):
     if frame is None:
         frame = _f(2)
+    shapes = []
+    copies = 1
     stack_i = []
     stack_len = []
     cur = top = None
@@ -31,6 +34,14 @@ def get_assign_shape(frame=None):
             instr_skipn -= 1
             i += 2
             continue
+        if not stack_len:
+            if top is not None:
+                copies -= 1
+                shapes.append(top)
+                cur = top = None
+                start_effect = effect
+            if not copies:
+                break
         instr = cods[i]
         instr_name = opname[instr]
         arg = cods[i + 1]
@@ -51,14 +62,30 @@ def get_assign_shape(frame=None):
                                jump=True)
         if effect < 0:
             break
-        if instr is UNPACK_SEQUENCE:
+        is_unpack = False
+        if is_unpack := instr is UNPACK_SEQUENCE:
             star_idx = -1
             real_len = oparg
-        elif instr is UNPACK_EX:
+        elif is_unpack := instr is UNPACK_EX:
             star_idx = oparg & 0xFF
             real_len = star_idx + (oparg >> 8) + 1
         elif not stack_len:
-            break
+            if instr is COPY and oparg == effect - 1:
+                copies += 1
+                start_effect = effect
+        if is_unpack:
+            temp = cur
+            cur = [None] * real_len
+            if star_idx >= 0:
+                cur[star_idx] = True
+            if temp is None:
+                temp = top = cur
+            else:
+                temp[stack_i[-1]] = cur
+                stack_i[-1] += 1
+            stack_i.append(0)
+            stack_len.append(real_len)
+            start_effect = effect
         else:
             if instr in hasjrel:
                 if "BACKWARD" in instr_name:
@@ -66,20 +93,18 @@ def get_assign_shape(frame=None):
                 instr_skipn = oparg - 1
             elif "STORE" in instr_name and effect < start_effect:
                 start_effect = effect
-                stack_i[-1] += 1
-            if stack_i[-1] == stack_len[-1]:
-                stack_i.pop()
-                stack_len.pop()
-            continue
-        temp = cur
-        cur = [None] * real_len
-        if star_idx > 0:
-            cur[star_idx] = True
-        if temp is None:
-            temp = top = cur
-        else:
-            temp[stack_i[-1]] = cur
-            stack_i[-1] += 1
-        stack_i.append(0)
-        stack_len.append(real_len)
-    return top
+                if not stack_len:
+                    copies -= 1
+                    shapes.append(None)
+                else:
+                    stack_i[-1] += 1
+                    if stack_i[-1] >= stack_len[-1]:
+                        stack_i.pop()
+                        stack_len.pop()
+    return shapes
+
+def get_assign_shape(frame=None):
+    if frame is None:
+        frame = _f(2)
+    shapes = get_assign_shapes(frame)
+    return shapes[0] if shapes else None
