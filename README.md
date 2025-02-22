@@ -554,7 +554,7 @@ b'e'
 ```
 
 **fcp.py**<br/>
-Calculates the number of possibilities of combining any number of sets, in order, without replacement. Original code by <@!207089259730042881> (lakmatiol). Example:
+Calculates the number of possibilities of combining any number of sets, in order, without replacement. [Original code](https://gist.github.com/thatbirdguythatuknownot/426e54ea57e616a347971186c674ee8b) by <@!207089259730042881> (lakmatiol). Example:
 ```py
 from fcp import solve
 
