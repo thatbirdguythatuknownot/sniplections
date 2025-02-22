@@ -552,3 +552,16 @@ b'b'
 b'y'
 b'e'
 ```
+
+**fcp.py**<br/>
+Calculates the number of possibilities of combining any number of sets, in order, without replacement. Original code by <@!207089259730042881> (lakmatiol). Example:
+```py
+from fcp import solve
+
+# Ways to create a 3-digit even number with no repeating digits:
+# 1. set of digits 1 - 9
+# 2. set of digits 0 - 9
+# 3. set of even digits 0, 2, 4, 6, 8
+sets = {*range(1, 10)}, {*range(10)}, {*range(0, 10, 2)}
+print(solve(*sets), "ways")  # 328 ways
+```
