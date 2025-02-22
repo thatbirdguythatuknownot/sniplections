@@ -1,20 +1,27 @@
-import itertools as it
-
 def disjoint(ss):
-    disj = {1 << i: {*s} for i, s in enumerate(ss)}
-    cont = True
-    while cont:
-        cont = False
-        for (o1, s1), (o2, s2) in it.combinations(disj.items(), 2):
-            if s := s1 & s2:
-                cont = True
+    disj = {}
+    for i, s1 in enumerate(ss):
+        o1 = 1 << i
+        s1 = {*s1}
+        for o2, s2 in [*disj.items()]:
+            if s1 < s2:
+                s2 -= s
+                disj[o1 | o2] = s1
+                break
+            if s1 == s2:
+                disj[o1 | o2] = s1
+                del disj[o2]
+                break
+            if s1 > s2:
+                s1 -= s2
+                disj[o1 | o2] = s2
+                del disj[o2]
+            elif s := s1 & s2:
                 s1 -= s
                 s2 -= s
-                if not s1:
-                    del disj[o1]
-                if not s2:
-                    del disj[o2]
                 disj[o1 | o2] = s
+        else:
+            disj[o1] = s1
     return disj
 
 def counting(disj, li, k=1):
