@@ -4,6 +4,11 @@ def disjoint(ss):
         o1 = 1 << i
         s1 = {*s1}
         for o2, s2 in [*disj.items()]:
+            if s1 > s2:
+                s1 -= s2
+                disj[o1 | o2] = s2
+                del disj[o2]
+                continue
             if s1 < s2:
                 s2 -= s
                 disj[o1 | o2] = s1
@@ -12,11 +17,7 @@ def disjoint(ss):
                 disj[o1 | o2] = s1
                 del disj[o2]
                 break
-            if s1 > s2:
-                s1 -= s2
-                disj[o1 | o2] = s2
-                del disj[o2]
-            elif s := s1 & s2:
+            if s := s1 & s2:
                 s1 -= s
                 s2 -= s
                 disj[o1 | o2] = s
@@ -35,7 +36,7 @@ def counting(disj, li, k=1):
     for o in disj:
         if not k & o:
             continue
-        if k == o or k2 > o:
+        if k == o:
             total += disj[o] * counting(disj, li, k2)
             continue
         rec = disj[o]
