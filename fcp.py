@@ -10,7 +10,7 @@ def disjoint(ss):
                 del disj[o2]
                 continue
             if s1 < s2:
-                s2 -= s
+                s2 -= s1
                 disj[o1 | o2] = s1
                 break
             if s1 == s2:
