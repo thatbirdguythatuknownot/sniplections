@@ -565,3 +565,6 @@ from fcp import solve
 sets = {*range(1, 10)}, {*range(10)}, {*range(0, 10, 2)}
 print(solve(*sets), "ways")  # 328 ways
 ```
+
+**safe_exec.py**<br/>
+Safe calculator I guess? Doesn't expose a `safe_exec()` function yet.
