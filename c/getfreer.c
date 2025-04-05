@@ -27,19 +27,43 @@ static uint64_t MSG_HASH[HASH_ARR_LEN] = {
 
 int main() {
     unsigned char buffer[MSG_LENGTH];
-    size_t i;
+    ssize_t i;
+    ssize_t maxlen;
     int ch;
 redo:
     printf("> ");
-    for (i = 0; (ch = _getch()) != '\n' && ch != '\r'; i++) {
-        if (i < MSG_LENGTH) {
-            buffer[i] = (unsigned char)ch;
+    i = maxlen = 0;
+    while ((ch = _getch()) != '\n' && ch != '\r') {
+        if (ch == 0x00 || ch == 0xE0) {
+            ch = _getch();
         }
-        printf("_");
+        if (ch == '\b') {
+            if (i > maxlen) {
+                maxlen = i;
+            }
+            printf("\r> ");
+            for (int j = 0; j < maxlen; ++j) {
+                printf(" ");
+            }
+            printf("\r> ");
+            for (int j = 1; j < i; ++j) {
+                printf("_");
+            }
+            i -= 2;
+            if (i < 0) {
+                i = maxlen = 0;
+            }
+            continue;
+        }
         if (ch == 0x03 || ch == 0x1a) { /* Ctrl+C or Ctrl+Z */
             puts("\nQuitting...");
             return 1;
         }
+        if (i < MSG_LENGTH) {
+            buffer[i] = (unsigned char)ch;
+        }
+        i++;
+        printf("_");
     }
     if (i != MSG_LENGTH) {
         puts("\nInvalid password!");
