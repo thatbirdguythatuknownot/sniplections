@@ -568,3 +568,19 @@ print(solve(*sets), "ways")  # 328 ways
 
 **safe_exec.py**<br/>
 Safe calculator I guess? Doesn't expose a `safe_exec()` function yet.
+
+**getsource.py**<br/>
+Attempt to get the source of a function with the `getsource.get_source()` method. Tested in 3.13. Example:
+```py
+import getsource as gs
+
+def half(a: int) -> float:
+    return a / 2
+
+print(gs.get_source(half))
+```
+Output:
+```
+def half(a: int) -> float:
+    return a / 2
+```
