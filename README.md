@@ -584,3 +584,6 @@ Output:
 def half(a: int) -> float:
     return a / 2
 ```
+
+**cvt_baybayin.py**<br/>
+Convert to/from Baybayin.
